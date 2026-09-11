@@ -177,6 +177,25 @@ def describe_all(subsample: int | None = None) -> list[dict]:
     return out
 
 
+# --- memoisation ------------------------------------------------------------
+# Modules routinely load the same dataset more than once in a run. Loading
+# backdoor costs about 8 seconds each time, so cache the result. Arrays are
+# marked read-only: a shared cache that callers can mutate in place is a
+# source of bugs that are very hard to trace.
+
+from functools import lru_cache
+
+_load_uncached = load_dataset
+
+
+@lru_cache(maxsize=32)
+def load_dataset(name, **kw):                      # noqa: F811
+    X, y, meta = _load_uncached(name, **kw)
+    X.flags.writeable = False
+    y.flags.writeable = False
+    return X, y, meta
+
+
 if __name__ == "__main__":
     rows = describe_all()
     path = RESULTS / "dataset_table.json"
