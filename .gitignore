@@ -18,3 +18,5 @@ figures/*
 !**/.gitkeep
 
 .DS_Store
+
+!results/dataset_table.json
