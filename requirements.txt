@@ -1,7 +1,5 @@
-# Unpinned for the first install. Once everything imports and the
-# smoke tests in step 2 pass, run:  pip freeze > requirements.lock.txt
-# and commit that. The lock file is what makes the repo reproducible
-# in January; this file is just the shopping list.
+# Shopping list. After installing, run:  pip freeze > requirements.lock.txt
+# The lock file is what makes the project rebuildable later.
 
 numpy
 scipy
@@ -13,14 +11,20 @@ tqdm
 # Outlier detection
 pyod
 
-# Local intrinsic dimensionality estimators
+# Local intrinsic dimensionality estimators (imports as "skdim")
 scikit-dimension
 
 # Projections
 openTSNE
 umap-learn
 pacmap
-trimap
 
-# Projection quality metrics (verify the PyPI name on install)
+# Projection quality metrics
 zadu
+
+# NOT INSTALLED YET, deliberately. trimap 1.2.0 requires torch>=2.1 and
+# annoy>=1.17.3. torch drags in several GB of CUDA packages, and annoy has no
+# Windows wheel so it must compile from source, which needs Microsoft C++
+# Build Tools. Neither is needed before week 6. Install it then, on its own:
+#     pip install trimap
+# trimap
