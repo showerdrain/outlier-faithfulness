@@ -1,0 +1,26 @@
+# Unpinned for the first install. Once everything imports and the
+# smoke tests in step 2 pass, run:  pip freeze > requirements.lock.txt
+# and commit that. The lock file is what makes the repo reproducible
+# in January; this file is just the shopping list.
+
+numpy
+scipy
+scikit-learn
+pandas
+matplotlib
+tqdm
+
+# Outlier detection
+pyod
+
+# Local intrinsic dimensionality estimators
+scikit-dimension
+
+# Projections
+openTSNE
+umap-learn
+pacmap
+trimap
+
+# Projection quality metrics (verify the PyPI name on install)
+zadu

@@ -1,0 +1,17 @@
+# Environment
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+
+# Data and computed artifacts are never version controlled.
+# Keep the directories, ignore the contents.
+data/raw/*
+data/processed/*
+cache/*
+results/*
+figures/*
+!**/.gitkeep
+
+.DS_Store
