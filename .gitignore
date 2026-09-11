@@ -5,8 +5,11 @@ __pycache__/
 *.py[cod]
 .ipynb_checkpoints/
 
+!results/dataset_table.json
+
 # data and computed artifacts are never version controlled
 # keep the directories, ignore the contents
+!results/dataset_table.json
 data/raw/*
 data/processed/*
 cache/*

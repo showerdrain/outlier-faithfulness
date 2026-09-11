@@ -14,6 +14,7 @@ Run directly to build the summary table:
 
 from __future__ import annotations
 
+import hashlib
 import json
 import urllib.request
 from dataclasses import dataclass, asdict
@@ -73,16 +74,26 @@ def load_dataset(
     name: str,
     standardize: bool = True,
     subsample: int | None = None,
+    drop_duplicates: bool = True,
     seed: int = DEFAULT_SEED,
 ) -> tuple[np.ndarray, np.ndarray, dict]:
     """Load one dataset.
 
-    standardize : zero mean, unit variance per feature. On by default because
-        every downstream step (kNN, LOF, LID, all projections) uses Euclidean
-        distance, which is meaningless across features on different scales.
-        Constant features are left alone rather than divided by zero.
-    subsample   : cap n, sampling stratified so the anomaly rate is preserved.
-        Needed for the large sets; recorded in meta so it is never silent.
+    standardize     : zero mean, unit variance per feature. On by default
+        because every downstream step (kNN, LOF, LID, all projections) uses
+        Euclidean distance, which is meaningless across features on different
+        scales. Constant features are left alone rather than divided by zero.
+    subsample       : cap n, sampling stratified so the anomaly rate is
+        preserved. Recorded in meta so a shrunken dataset is never silent.
+    drop_duplicates : remove exact duplicate rows, keeping the first. On by
+        default because duplicates put zero distances into the neighbour
+        graph, which makes LOF degenerate and breaks the MLE local intrinsic
+        dimensionality estimator outright (it takes logs of distance ratios).
+        Campos et al. (2016) ship with-and-without variants for this reason.
+
+    meta['data_hash'] identifies the exact arrays returned, after every
+    transformation above. Step 4 keys the neighbour cache on it, so changing
+    any option here produces a new cache entry instead of a silent stale hit.
     """
     if name not in REGISTRY:
         raise KeyError(f"unknown dataset {name!r}; known: {sorted(REGISTRY)}")
@@ -95,11 +106,28 @@ def load_dataset(
 
     n_dup = n_full - len(np.unique(X, axis=0))
 
-    if subsample is not None and subsample < n_full:
+    n_removed = 0
+    n_conflicting = 0
+    if drop_duplicates and n_dup > 0:
+        _, first_idx, inverse = np.unique(X, axis=0, return_index=True, return_inverse=True)
+        inverse = inverse.ravel()
+        for g in np.flatnonzero(np.bincount(inverse) > 1):
+            if len(np.unique(y[inverse == g])) > 1:
+                n_conflicting += 1
+        keep = np.sort(first_idx)
+        n_removed = len(X) - len(keep)
+        X, y = X[keep], y[keep]
+        if n_removed > 0.01 * n_full:
+            print(f"  note: {name} lost {n_removed} duplicate rows "
+                  f"({100 * n_removed / n_full:.1f}% of the original)")
+
+    n_after_dedup = X.shape[0]
+
+    if subsample is not None and subsample < n_after_dedup:
         rng = np.random.default_rng(seed)
         idx_out = np.flatnonzero(y == 1)
         idx_in = np.flatnonzero(y == 0)
-        keep_out = max(1, round(subsample * len(idx_out) / n_full))
+        keep_out = max(1, round(subsample * len(idx_out) / n_after_dedup))
         keep_in = subsample - keep_out
         sel = np.concatenate([
             rng.choice(idx_out, size=min(keep_out, len(idx_out)), replace=False),
@@ -114,8 +142,13 @@ def load_dataset(
         sd[sd == 0] = 1.0          # leave constant features untouched
         X = (X - mu) / sd
 
+    data_hash = hashlib.sha256(
+        np.ascontiguousarray(X).tobytes() + np.ascontiguousarray(y).tobytes()
+    ).hexdigest()[:16]
+
     meta = {
         "name": name,
+        "data_hash": data_hash,
         "source_file": src.file,
         "domain": src.domain,
         "note": src.note,
@@ -126,8 +159,10 @@ def load_dataset(
         "n_anomalies": int(y.sum()),
         "anomaly_rate": float(y.mean()),
         "duplicate_rows_in_full": int(n_dup),
+        "duplicates_removed": int(n_removed),
+        "duplicate_groups_with_conflicting_labels": int(n_conflicting),
         "standardized": bool(standardize),
-        "subsampled_to": subsample if subsample is not None and subsample < n_full else None,
+        "subsampled_to": subsample if subsample is not None and subsample < n_after_dedup else None,
         "seed": seed if subsample is not None else None,
     }
     return X, y, meta
@@ -147,10 +182,12 @@ if __name__ == "__main__":
     path = RESULTS / "dataset_table.json"
     path.write_text(json.dumps(rows, indent=2))
 
-    hdr = f"{'dataset':<12}{'domain':<19}{'n':>8}{'D':>6}{'anom%':>8}{'dups':>8}"
+    hdr = (f"{'dataset':<12}{'domain':<19}{'n':>8}{'D':>6}{'anom%':>8}"
+           f"{'dups cut':>10}  {'data_hash':<16}")
     print("\n" + hdr)
     print("-" * len(hdr))
     for r in sorted(rows, key=lambda r: (r["domain"], -r["n"])):
         print(f"{r['name']:<12}{r['domain']:<19}{r['n']:>8}{r['D']:>6}"
-              f"{100 * r['anomaly_rate']:>8.2f}{r['duplicate_rows_in_full']:>8}")
+              f"{100 * r['anomaly_rate']:>8.2f}{r['duplicates_removed']:>10}  "
+              f"{r['data_hash']:<16}")
     print(f"\nWrote {path}")
