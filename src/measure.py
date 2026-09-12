@@ -20,6 +20,19 @@ analyst never sees, a phantom outlier is analyst time spent on nothing.
 The aggregate is computed over the top ranks only, because those are the
 points anyone actually inspects. The budget is the true number of anomalies,
 the standard P@n convention in the outlier detection literature.
+
+TIES ARE AN OPEN PROBLEM. A hard top-k cut is only well defined if no points
+share a score across the boundary. On shuttle that assumption fails badly:
+49,097 points take only 7,580 distinct kNN-distance values, and four points
+sit on the boundary score exactly. Which of them falls inside the cut is then
+decided by the sort, not by the data.
+
+Sorting here is forced stable so the answer is at least reproducible, and
+boundary_ties is reported so fragile cases are visible rather than silent.
+That is a patch, not a solution. The real version needs an explicit policy:
+break ties by original-space rank, cut on score value rather than position,
+or report the tied band as ambiguous. See Schubert, Wojdanowski, Zimek &
+Kriegel (SDM 2012) on evaluating outlier rankings, which treats this directly.
 """
 
 from __future__ import annotations
@@ -28,6 +41,19 @@ import json
 
 import numpy as np
 from scipy.stats import rankdata
+
+
+def top_k(s: np.ndarray, k: int) -> tuple[np.ndarray, int]:
+    """Indices of the k most outlying points, plus the tie count at the cut.
+
+    Stable sort, so ties resolve by index and the result does not depend on
+    the sorting implementation. numpy's default quicksort is unstable and
+    gave different answers on different machines for exactly this reason.
+    """
+    order = np.argsort(-s, kind="stable")[:k]
+    boundary = s[order[-1]]
+    n_tied = int((s == boundary).sum())
+    return order, (n_tied if n_tied > 1 else 0)
 
 
 def signed_displacement(s_hd: np.ndarray, s_ld: np.ndarray) -> np.ndarray:
@@ -45,14 +71,17 @@ def topk_failures(s_hd: np.ndarray, s_ld: np.ndarray, k: int) -> dict:
     With equal budgets the two counts are necessarily equal, so the rate is
     reported once. What differs, and what matters, is WHICH points.
     """
-    top_hd = set(np.argsort(-s_hd)[:k].tolist())
-    top_ld = set(np.argsort(-s_ld)[:k].tolist())
+    order_hd, ties_hd = top_k(s_hd, k)
+    order_ld, ties_ld = top_k(s_ld, k)
+    top_hd, top_ld = set(order_hd.tolist()), set(order_ld.tolist())
     masked = sorted(top_hd - top_ld)
     phantom = sorted(top_ld - top_hd)
     return {
         "k": k,
         "overlap": len(top_hd & top_ld),
         "rate": len(masked) / k,
+        "boundary_ties_hd": ties_hd,
+        "boundary_ties_ld": ties_ld,
         "masked_idx": masked,
         "phantom_idx": phantom,
     }
@@ -67,9 +96,10 @@ def summarise(s_hd, s_ld, y, k=None) -> dict:
 
     # Of the true anomalies the original space ranked highly, how many did
     # the projection lose? This is the number with a cost attached.
-    top_hd = np.argsort(-s_hd)[:k]
-    true_in_top_hd = top_hd[y[top_hd]]
-    top_ld_set = set(np.argsort(-s_ld)[:k].tolist())
+    order_hd, _ = top_k(s_hd, k)
+    order_ld, _ = top_k(s_ld, k)
+    true_in_top_hd = order_hd[y[order_hd]]
+    top_ld_set = set(order_ld.tolist())
     lost = [int(i) for i in true_in_top_hd if int(i) not in top_ld_set]
 
     return {
@@ -80,6 +110,9 @@ def summarise(s_hd, s_ld, y, k=None) -> dict:
         "of_p05_anomalies": float(np.percentile(of[y], 5)),
         "true_anomalies_found_hd": int(len(true_in_top_hd)),
         "true_anomalies_lost": len(lost),
+        "boundary_ties_hd": tk["boundary_ties_hd"],
+        "boundary_ties_ld": tk["boundary_ties_ld"],
+        "distinct_scores_hd": int(len(np.unique(s_hd))),
         "lost_idx": lost,
         "masked_idx": tk["masked_idx"],
         "phantom_idx": tk["phantom_idx"],
@@ -116,12 +149,17 @@ if __name__ == "__main__":
         panels[name] = (Y, y, r)
 
     hdr = (f"{'dataset':<12}{'k':>6}{'overlap':>9}{'found':>7}{'lost':>6}"
-           f"{'OF med anom':>13}{'OF p05 anom':>13}")
+           f"{'OF med':>9}{'OF p05':>9}{'distinct':>10}{'ties':>6}")
     print("\n" + hdr); print("-" * len(hdr))
     for r in rows:
+        ties = max(r["boundary_ties_hd"], r["boundary_ties_ld"])
+        flag = f"{ties}" if ties else "-"
         print(f"{r['dataset']:<12}{r['k']:>6}{100*r['shortlist_overlap']:>8.0f}%"
               f"{r['true_anomalies_found_hd']:>7}{r['true_anomalies_lost']:>6}"
-              f"{r['of_median_anomalies']:>13.3f}{r['of_p05_anomalies']:>13.3f}")
+              f"{r['of_median_anomalies']:>9.3f}{r['of_p05_anomalies']:>9.3f}"
+              f"{r['distinct_scores_hd']:>10}{flag:>6}")
+    print("\n  distinct = distinct original-space score values out of n")
+    print("  ties     = points sharing the boundary score; the cut is arbitrary among them")
 
     show = ["shuttle", "backdoor", "musk", "ionosphere"]
     fig, axes = plt.subplots(1, 4, figsize=(18, 4.6))
