@@ -20,3 +20,5 @@ figures/*
 .DS_Store
 
 !results/dataset_table.json
+!results/screen_table.json
+!results/splits.json

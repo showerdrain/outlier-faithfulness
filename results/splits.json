@@ -1,0 +1,402 @@
+{
+  "status": "proposed; pending supervisor confirmation",
+  "date": "2026-10-15",
+  "criteria": {
+    "min_D": 10,
+    "min_auc": 0.65,
+    "max_rate": 25.0,
+    "min_n": 200
+  },
+  "screen_cap": 20000,
+  "k": 20,
+  "benchmark": [
+    {
+      "name": "backdoor",
+      "family": "backdoor",
+      "n": 87020,
+      "D": 196,
+      "rate": 2.16,
+      "auc": 0.905,
+      "lid_median": 5.27
+    },
+    {
+      "name": "campaign",
+      "family": "campaign",
+      "n": 41176,
+      "D": 62,
+      "rate": 11.27,
+      "auc": 0.742,
+      "lid_median": 5.53
+    },
+    {
+      "name": "celeba",
+      "family": "celeba",
+      "n": 113983,
+      "D": 39,
+      "rate": 2.56,
+      "auc": 0.741,
+      "lid_median": 9.0
+    },
+    {
+      "name": "cover",
+      "family": "cover",
+      "n": 286048,
+      "D": 10,
+      "rate": 0.96,
+      "auc": 0.911,
+      "lid_median": 4.81
+    },
+    {
+      "name": "cardio",
+      "family": "ctg",
+      "n": 1822,
+      "D": 21,
+      "rate": 9.6,
+      "auc": 0.788,
+      "lid_median": 4.9
+    },
+    {
+      "name": "fraud",
+      "family": "fraud",
+      "n": 275661,
+      "D": 29,
+      "rate": 0.17,
+      "auc": 0.973,
+      "lid_median": 6.47
+    },
+    {
+      "name": "letter",
+      "family": "letter",
+      "n": 1598,
+      "D": 32,
+      "rate": 6.26,
+      "auc": 0.837,
+      "lid_median": 5.79
+    },
+    {
+      "name": "mnist",
+      "family": "mnist",
+      "n": 7603,
+      "D": 100,
+      "rate": 9.21,
+      "auc": 0.865,
+      "lid_median": 10.01
+    },
+    {
+      "name": "musk",
+      "family": "musk",
+      "n": 3062,
+      "D": 166,
+      "rate": 3.17,
+      "auc": 0.939,
+      "lid_median": 5.29
+    },
+    {
+      "name": "pageblocks",
+      "family": "pageblocks",
+      "n": 5393,
+      "D": 10,
+      "rate": 9.46,
+      "auc": 0.915,
+      "lid_median": 3.6
+    },
+    {
+      "name": "pendigits",
+      "family": "pendigits",
+      "n": 6870,
+      "D": 16,
+      "rate": 2.27,
+      "auc": 0.805,
+      "lid_median": 5.26
+    },
+    {
+      "name": "satimage2",
+      "family": "statlog-landsat",
+      "n": 5801,
+      "D": 36,
+      "rate": 1.19,
+      "auc": 0.984,
+      "lid_median": 11.44
+    },
+    {
+      "name": "vowels",
+      "family": "vowels",
+      "n": 1452,
+      "D": 12,
+      "rate": 3.17,
+      "auc": 0.959,
+      "lid_median": 5.06
+    },
+    {
+      "name": "waveform",
+      "family": "waveform",
+      "n": 3443,
+      "D": 21,
+      "rate": 2.9,
+      "auc": 0.744,
+      "lid_median": 14.58
+    },
+    {
+      "name": "wdbc",
+      "family": "wisconsin-diagnostic",
+      "n": 367,
+      "D": 30,
+      "rate": 2.72,
+      "auc": 0.982,
+      "lid_median": 7.89
+    }
+  ],
+  "benchmark_dropped_for_family": [],
+  "development": [
+    {
+      "name": "shuttle",
+      "family": "shuttle",
+      "why": "low-LID control (median about 2): projection should lose little, so heavy reported damage means the measure is wrong. Also the tie test bed: 49,097 points share few distinct scores. Large n.",
+      "fails": [
+        "D<10"
+      ],
+      "auc": 0.777,
+      "lid_median": 2.04,
+      "lid_p90": 4.25
+    },
+    {
+      "name": "wbc",
+      "family": "wisconsin-original",
+      "why": "clean negative control: near-perfect detection (AUC 0.99), small, fast to iterate on. Its source family (wisconsin-original) is not in the benchmark; WDBC there is a different feature set.",
+      "fails": [
+        "D<10"
+      ],
+      "auc": 0.992,
+      "lid_median": 5.17,
+      "lid_p90": 8.4
+    },
+    {
+      "name": "ionosphere",
+      "family": "ionosphere",
+      "why": "the positive case: the heaviest LID tail found (90th percentile 31 in 32 dimensions) and the dataset PCA damages most.",
+      "fails": [
+        "rate>25%"
+      ],
+      "auc": 0.902,
+      "lid_median": 6.21,
+      "lid_p90": 30.89
+    },
+    {
+      "name": "fault",
+      "family": "fault",
+      "why": "high ambient, low intrinsic dimension (27 features, median LID 4.8): the opposite profile to ionosphere at a similar dimensionality.",
+      "fails": [
+        "rate>25%"
+      ],
+      "auc": 0.73,
+      "lid_median": 4.8,
+      "lid_p90": 8.3
+    },
+    {
+      "name": "magic",
+      "family": "magic",
+      "why": "scale: about 19,000 points, so a permutation null or tie policy that is only affordable on small data shows it here.",
+      "fails": [
+        "rate>25%"
+      ],
+      "auc": 0.804,
+      "lid_median": 6.78,
+      "lid_p90": 9.77
+    }
+  ],
+  "development_unused_candidates": [
+    "annthyroid",
+    "breastw",
+    "glass",
+    "hepatitis",
+    "http",
+    "lymphography",
+    "mammography",
+    "pima",
+    "smtp",
+    "stamps",
+    "thyroid",
+    "wine"
+  ],
+  "case_study": [
+    {
+      "name": "backdoor",
+      "why": "the only high-dimensional network-intrusion dataset that passes the screen; also analysed at full size as the security case study"
+    }
+  ],
+  "excluded": [
+    {
+      "name": "aloi",
+      "fails": [
+        "AUC<0.65"
+      ]
+    },
+    {
+      "name": "annthyroid",
+      "fails": [
+        "D<10"
+      ]
+    },
+    {
+      "name": "breastw",
+      "fails": [
+        "D<10",
+        "rate>25%"
+      ]
+    },
+    {
+      "name": "cardiotocography",
+      "fails": [
+        "AUC<0.65"
+      ]
+    },
+    {
+      "name": "census",
+      "fails": [
+        "AUC<0.65"
+      ]
+    },
+    {
+      "name": "donors",
+      "fails": [
+        "AUC<0.65"
+      ]
+    },
+    {
+      "name": "glass",
+      "fails": [
+        "D<10"
+      ]
+    },
+    {
+      "name": "hepatitis",
+      "fails": [
+        "n<200"
+      ]
+    },
+    {
+      "name": "http",
+      "fails": [
+        "D<10"
+      ]
+    },
+    {
+      "name": "internetads",
+      "fails": [
+        "AUC<0.65"
+      ]
+    },
+    {
+      "name": "landsat",
+      "fails": [
+        "AUC<0.65"
+      ]
+    },
+    {
+      "name": "lymphography",
+      "fails": [
+        "n<200"
+      ]
+    },
+    {
+      "name": "mammography",
+      "fails": [
+        "D<10"
+      ]
+    },
+    {
+      "name": "optdigits",
+      "fails": [
+        "AUC<0.65"
+      ]
+    },
+    {
+      "name": "pima",
+      "fails": [
+        "D<10",
+        "rate>25%"
+      ]
+    },
+    {
+      "name": "satellite",
+      "fails": [
+        "rate>25%"
+      ]
+    },
+    {
+      "name": "skin",
+      "fails": [
+        "D<10",
+        "AUC<0.65",
+        "rate>25%"
+      ]
+    },
+    {
+      "name": "smtp",
+      "fails": [
+        "D<10"
+      ]
+    },
+    {
+      "name": "spambase",
+      "fails": [
+        "AUC<0.65",
+        "rate>25%"
+      ]
+    },
+    {
+      "name": "speech",
+      "fails": [
+        "AUC<0.65"
+      ]
+    },
+    {
+      "name": "stamps",
+      "fails": [
+        "D<10"
+      ]
+    },
+    {
+      "name": "thyroid",
+      "fails": [
+        "D<10"
+      ]
+    },
+    {
+      "name": "vertebral",
+      "fails": [
+        "D<10",
+        "AUC<0.65"
+      ]
+    },
+    {
+      "name": "wilt",
+      "fails": [
+        "D<10",
+        "AUC<0.65"
+      ]
+    },
+    {
+      "name": "wine",
+      "fails": [
+        "n<200"
+      ]
+    },
+    {
+      "name": "wpbc",
+      "fails": [
+        "AUC<0.65",
+        "n<200"
+      ]
+    },
+    {
+      "name": "yeast",
+      "fails": [
+        "D<10",
+        "AUC<0.65",
+        "rate>25%"
+      ]
+    }
+  ],
+  "families_on_both_sides": []
+}
