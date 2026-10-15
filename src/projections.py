@@ -24,11 +24,10 @@ import time
 
 import numpy as np
 from sklearn.decomposition import PCA
-from sklearn.neighbors import NearestNeighbors
 
 from config import CACHE, RESULTS, DEFAULT_K, DEFAULT_SEED
 from datasets import load_dataset
-from neighbors import get_knn, knn_score
+from neighbors import get_knn, knn_graph, knn_score
 
 
 # --- the projection methods -------------------------------------------------
@@ -108,13 +107,11 @@ def project(
 def knn_dist(Y: np.ndarray, k: int = DEFAULT_K) -> np.ndarray:
     """Neighbour distances within a projected space. Self excluded.
 
-    Not disk-cached: in 2D this is a kd-tree query and takes well under a
-    second even at n=87k, so caching would cost more in complexity than it
-    saves. The original-space graph is cached because there it is minutes.
+    Goes through the same knn_graph() as the original space, so both sides
+    of every comparison are computed identically. Not disk-cached: in 2D
+    this is a kd-tree query taking well under a second even at n=87k.
     """
-    nn = NearestNeighbors(n_neighbors=k + 1).fit(Y)
-    d, _ = nn.kneighbors(Y)
-    return d[:, 1:]
+    return knn_graph(Y, k)[0]
 
 
 if __name__ == "__main__":

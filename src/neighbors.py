@@ -13,6 +13,14 @@ new entry rather than a silent stale hit.
 Graphs are stored at K_CACHE neighbours and sliced down on request, so a
 detector at k=20 and another at k=50 both read the same file.
 
+ONE CODE PATH FOR EVERY SPACE. The original space and every projection are
+measured by the same function, knn_graph(), at the same float64 precision.
+Until October 2026 the cache stored float32 distances while projections were
+scored in float64. The identity check in validate.py showed the cost: data
+"projected" onto itself moved 29 of 223 points on wbc, because rounding
+created ties on one side that the other side broke. Cache files now carry a
+version tag, so an old float32 file can never be mistaken for a current one.
+
     python src/neighbors.py            # build for the default shortlist
     python src/neighbors.py cardio wbc # build for named datasets
 """
@@ -31,10 +39,29 @@ from datasets import load_dataset
 
 K_CACHE = 100          # neighbours stored; requests for k <= this are sliced
 METRIC = "euclidean"
+CACHE_VERSION = "v2"   # v2: float64 distances, self excluded by index
 
 
 def _cache_path(meta: dict) -> "object":
-    return CACHE / f"knn_{meta['name']}_{meta['data_hash']}_K{K_CACHE}_{METRIC}.npz"
+    return CACHE / (f"knn_{meta['name']}_{meta['data_hash']}_K{K_CACHE}_"
+                    f"{METRIC}_{CACHE_VERSION}.npz")
+
+
+def knn_graph(X: np.ndarray, k: int) -> tuple[np.ndarray, np.ndarray]:
+    """The k nearest neighbours of every point, the point itself excluded.
+
+    Used for the original space AND for every projection, so the two sides
+    of a comparison are computed by literally the same code.
+
+    Self is excluded by calling kneighbors() with no argument, which drops
+    each point by its index. The older approach, querying the data against
+    itself and dropping column 0, assumes the point is always its own first
+    neighbour; that fails silently when two points coincide, which happens
+    in projections even after duplicates are removed from the original data.
+    """
+    nn = NearestNeighbors(n_neighbors=k, metric=METRIC).fit(X)
+    dist, idx = nn.kneighbors()
+    return dist.astype(np.float64), idx.astype(np.int32)
 
 
 def get_knn(
@@ -47,16 +74,18 @@ def get_knn(
     """Return (distances, indices, meta) for the k nearest neighbours.
 
     Self is excluded, so column 0 is the first true neighbour and column
-    k-1 is the k-th. Distances are float32 and indices int32: ample
-    precision for distances, and half the disk of float64/int64.
+    k-1 is the k-th. Distances are float64, matching the projected side;
+    indices are int32. Very small datasets store n-1 neighbours instead of
+    K_CACHE, since a point cannot have more neighbours than that.
 
     Any keyword accepted by load_dataset passes straight through, and
     affects the cache key via the data hash.
     """
-    if k > K_CACHE:
-        raise ValueError(f"k={k} exceeds K_CACHE={K_CACHE}; raise K_CACHE and rebuild")
-
     X, y, meta = load_dataset(name, **loader_kw)
+    k_store = min(K_CACHE, meta["n"] - 1)
+    if k > k_store:
+        raise ValueError(f"k={k} exceeds the {k_store} neighbours stored for "
+                         f"{name} (n={meta['n']}, K_CACHE={K_CACHE})")
     path = _cache_path(meta)
 
     if path.exists() and not rebuild:
@@ -64,19 +93,16 @@ def get_knn(
         dist, idx = z["dist"], z["idx"]
     else:
         if verbose:
-            print(f"  computing {K_CACHE}-NN graph for {name} "
+            print(f"  computing {k_store}-NN graph for {name} "
                   f"(n={meta['n']}, D={meta['D']}) ...", flush=True)
         t0 = time.time()
-        nn = NearestNeighbors(n_neighbors=K_CACHE + 1, metric=METRIC).fit(X)
-        dist, idx = nn.kneighbors(X)
-        dist, idx = dist[:, 1:], idx[:, 1:]        # drop self
-        dist = dist.astype(np.float32)
-        idx = idx.astype(np.int32)
+        dist, idx = knn_graph(X, k_store)
         elapsed = time.time() - t0
 
         np.savez_compressed(path, dist=dist, idx=idx)
         path.with_suffix(".json").write_text(json.dumps(
-            {**meta, "K_CACHE": K_CACHE, "metric": METRIC,
+            {**meta, "K_CACHE": k_store, "metric": METRIC,
+             "cache_version": CACHE_VERSION, "dtype": "float64",
              "build_seconds": round(elapsed, 2),
              "n_zero_first_distances": int((dist[:, 0] == 0).sum())},
             indent=2))

@@ -33,6 +33,12 @@ That is a patch, not a solution. The real version needs an explicit policy:
 break ties by original-space rank, cut on score value rather than position,
 or report the tied band as ambiguous. See Schubert, Wojdanowski, Zimek &
 Kriegel (SDM 2012) on evaluating outlier rankings, which treats this directly.
+
+Tie DIAGNOSTICS (boundary_ties, distinct_scores) compare with a relative
+tolerance, TIE_RTOL, never exact equality. The same distances computed by two
+routes agree to about 1e-13 but not bit for bit, so exact-equality counts
+differed between Windows and Linux (backdoor: 84,839 vs 84,837 distinct).
+Differences below 1e-9 relative carry no meaning for an outlier ranking.
 """
 
 from __future__ import annotations
@@ -41,6 +47,17 @@ import json
 
 import numpy as np
 from scipy.stats import rankdata
+
+TIE_RTOL = 1e-9
+
+
+def n_distinct(s: np.ndarray, rtol: float = TIE_RTOL) -> int:
+    """Number of distinct values, treating values within rtol as equal."""
+    v = np.sort(np.asarray(s, dtype=np.float64))
+    if v.size == 0:
+        return 0
+    gaps = np.diff(v) > rtol * np.maximum(np.abs(v[1:]), np.finfo(float).tiny)
+    return 1 + int(gaps.sum())
 
 
 def top_k(s: np.ndarray, k: int) -> tuple[np.ndarray, int]:
@@ -52,7 +69,7 @@ def top_k(s: np.ndarray, k: int) -> tuple[np.ndarray, int]:
     """
     order = np.argsort(-s, kind="stable")[:k]
     boundary = s[order[-1]]
-    n_tied = int((s == boundary).sum())
+    n_tied = int(np.isclose(s, boundary, rtol=TIE_RTOL, atol=0.0).sum())
     return order, (n_tied if n_tied > 1 else 0)
 
 
@@ -112,7 +129,7 @@ def summarise(s_hd, s_ld, y, k=None) -> dict:
         "true_anomalies_lost": len(lost),
         "boundary_ties_hd": tk["boundary_ties_hd"],
         "boundary_ties_ld": tk["boundary_ties_ld"],
-        "distinct_scores_hd": int(len(np.unique(s_hd))),
+        "distinct_scores_hd": n_distinct(s_hd),
         "lost_idx": lost,
         "masked_idx": tk["masked_idx"],
         "phantom_idx": tk["phantom_idx"],
