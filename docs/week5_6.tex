@@ -1,0 +1,190 @@
+% docs/week5_6.tex
+% Weeks 5 and 6: sanity checks and a tested revision of the measure, then the
+% benchmark in two dimensions. The same content as docs/MEASURE.md (section 9)
+% and docs/BENCHMARK.md, shortened. Needs amsmath and amssymb only. There is
+% no bibliography: references are written out in the text.
+%
+% Use: paste into progress.tex, or put \input{week5_6} in main.tex after
+% \input{week4}.
+% Numbers: results/week5_revision.json, results/week5_redundancy_v1.json,
+% results/week5_score_check.json, results/week6_benchmark.json and
+% results/week6_stats.json, written by src/revise_measure.py,
+% src/score_check.py and src/benchmark.py.
+
+\section*{Week 5: sanity checks and a multi-scale candidate}
+
+All on the exploration set, at 2D with the top 5\% budget, with five seeds
+for every stochastic method and TriMap added as a sixth method.
+
+\subsection*{The candidate}
+
+Version 1 reads each space with one neighbourhood size, $k = 20$. UMAP and
+PaCMAP gather isolated outliers into tight clumps, and a member of a clump
+of 40 has its 20th neighbour inside the clump: read at $k = 20$ the clump
+looks dense, read at $k = 50$ it is seen to be apart. The candidate reads
+both spaces at $K = \{20, 50, 100\}$,
+\begin{equation*}
+  s_i = \max_{k \in K} \frac{d_k(i)}{\operatorname{median}_j d_k(j)},
+\end{equation*}
+where $d_k(i)$ is the distance from $x_i$ to its $k$-th nearest neighbour,
+and keeps everything else of version 1, which is the case $K = \{20\}$. The
+precedent is Breunig, Kriegel, Ng and Sander (2000), who rank points by their
+largest LOF over a range of MinPts.
+
+\subsection*{Decision rule, fixed before the results were read}
+
+Adopt the candidate if (i) it passes the checks with known answers, (ii) it
+moves the masking rate of the linear methods by at most 0.10, (iii) its
+verdict depends on its scales less than version 1's depends on $k$, and (iv)
+the Jaccard overlap of its masked sets across seeds is at most 0.05 below
+version 1's. Otherwise keep version 1.
+
+\subsection*{Outcome: version 1 stays}
+
+\begin{itemize}
+  \item (i) holds. All 56 checks in \texttt{src/validate.py} pass. In a new
+    known-answer test, forty outliers are placed in a picture as one tight
+    clump far from the bulk: version 1 calls all forty hidden, the candidate
+    none. Both call outliers placed inside the bulk hidden.
+  \item (ii) fails narrowly: the other nine linear runs move by 0.083 at most,
+    but shuttle under PCA moves from 0.569 to 0.468.
+  \item (iii) holds: under three other sets of scales the candidate's
+    masking rate stays within 0.10 in 89\% of runs (median change 0.010);
+    version 1 under other $k$ does so in 71\% (median 0.041).
+  \item (iv) fails narrowly: mean Jaccard 0.741 against 0.797. The loss is
+    in t-SNE and TriMap.
+\end{itemize}
+The candidate is run beside version 1 on the benchmark, as a secondary
+analysis declared before the run.
+
+\subsection*{Version 1 against the candidate}
+
+Masking rate, mean over five seeds; version 1, then the candidate.
+\begin{center}
+\small
+\begin{tabular}{lccccc}
+\hline
+ & shuttle & wbc & ionosphere & fault & magic \\
+\hline
+PCA & 0.57, 0.47 & 0.00, 0.08 & 1.00, 1.00 & 0.58, 0.61 & 0.39, 0.37 \\
+Random & 0.40, 0.38 & 0.37, 0.38 & 0.66, 0.66 & 0.59, 0.56 & 0.38, 0.38 \\
+UMAP & 0.90, 0.90 & 0.77, 0.32 & 0.98, 1.00 & 0.81, 0.71 & 0.85, 0.71 \\
+t-SNE & 0.73, 0.81 & 0.77, 0.27 & 0.84, 0.86 & 0.69, 0.77 & 0.93, 0.86 \\
+PaCMAP & 0.85, 0.82 & 0.95, 0.17 & 1.00, 1.00 & 0.97, 0.62 & 0.89, 0.87 \\
+TriMap & 0.61, 0.63 & 0.82, 0.22 & 0.97, 0.99 & 0.75, 0.72 & 0.94, 0.94 \\
+\hline
+\end{tabular}
+\end{center}
+
+\subsection*{Other findings}
+
+\begin{itemize}
+  \item \textbf{The verdicts depend on the detector.} LOF goes through the
+    definition unchanged and stays close to calibrated, but orders the six
+    methods differently from kNN on the three continuous datasets (rank
+    correlations $+0.85$, $-0.43$ and $+0.26$). On magic, kNN finds the
+    linear methods keep most of the top 5\% and the neighbour-based methods
+    lose most of it; LOF finds every method loses 68 to 79\%.
+  \item \textbf{Not redundant with continuity, except for linear maps.}
+    For PCA and random projections, per-point continuity (Venna and Kaski)
+    separates masked from retained points well (median AUC 0.90). For the
+    neighbour-based methods it points the wrong way (median 0.24 under
+    version 1): the points they hide keep their original neighbours better
+    than the points they keep, as a group of outliers moved into the
+    picture together and packed into a clump would.
+  \item \textbf{Ranks, not scores.} Scores do not carry over between spaces
+    of different dimension: under PCA the median score ratio of wbc's top
+    5\% grows from 5.1 at nine dimensions to 20.1 at two, and Gaussian
+    scaling (Kriegel, Kr\"oger, Schubert and Zimek 2011) saturates at the top.
+  \item \textbf{Seeds.} Only 16\% of the top 5\% gets the same call from five
+    random projections; one random projection says little about any single
+    point. t-SNE is the steadiest method.
+\end{itemize}
+
+\section*{Week 6: the benchmark in two dimensions}
+
+The fifteen benchmark datasets, capped at 20,000 points each, projected to
+2D by PCA, a Gaussian random projection, UMAP, t-SNE, PaCMAP and TriMap
+(library defaults, three seeds). The projections were computed while week 5
+ran; no outlier score touched benchmark data until week 5 had decided.
+Version 1 is the primary analysis, the multi-scale candidate a secondary one
+declared before the run. The unit of comparison is the dataset, with one
+value per method: the mean over seeds.
+
+\subsection*{Masking rate, version 1, top 5\%}
+
+\begin{center}
+\small
+\begin{tabular}{lcccccc}
+\hline
+ & PCA & Random & UMAP & t-SNE & PaCMAP & TriMap \\
+\hline
+cover & 0.58 & 0.66 & 0.85 & 0.79 & 0.82 & 0.77 \\
+pageblocks & 0.34 & 0.31 & 0.85 & 0.87 & 0.84 & 0.55 \\
+vowels & 0.79 & 0.79 & 0.72 & 0.54 & 0.82 & 0.75 \\
+pendigits & 0.68 & 0.70 & 0.91 & 0.81 & 0.88 & 0.71 \\
+cardio & 0.49 & 0.46 & 0.83 & 0.78 & 0.99 & 0.93 \\
+waveform & 0.72 & 0.80 & 0.85 & 0.78 & 0.69 & 0.72 \\
+fraud & 0.43 & 0.54 & 0.89 & 0.87 & 0.89 & 0.93 \\
+wdbc & 0.05 & 0.37 & 0.60 & 0.58 & 0.44 & 0.49 \\
+letter & 0.68 & 0.78 & 0.84 & 0.53 & 0.87 & 0.86 \\
+satimage2 & 0.56 & 0.54 & 0.70 & 0.57 & 0.68 & 0.60 \\
+celeba & 0.64 & 0.81 & 0.76 & 0.76 & 0.75 & 0.65 \\
+campaign & 0.57 & 0.67 & 0.84 & 0.75 & 0.91 & 0.83 \\
+mnist & 0.83 & 0.62 & 0.78 & 0.77 & 0.81 & 0.41 \\
+musk & 0.58 & 0.70 & 0.64 & 0.52 & 0.54 & 0.47 \\
+backdoor & 0.54 & 0.33 & 0.58 & 0.62 & 0.81 & 0.64 \\
+\hline
+mean & 0.57 & 0.60 & 0.78 & 0.70 & 0.78 & 0.69 \\
+average rank & 2.27 & 2.67 & 4.73 & 3.33 & 4.60 & 3.40 \\
+\hline
+\end{tabular}
+\end{center}
+
+\subsection*{Comparison}
+
+Friedman's test rejects equal masking rates ($\chi^2 = 21.4$, $p = 0.0007$;
+Iman-Davenport $F = 5.6$). With six methods and fifteen datasets Nemenyi's
+critical difference is 1.95 ranks. Pairwise Wilcoxon signed-rank tests with
+Holm's correction, as Benavoli, Corani and Mangili (2016) recommend, find
+that PCA hides less than UMAP (on 13 of 15 datasets) and PaCMAP (12 of 15),
+the random projection less than UMAP (12 of 15), TriMap less than PaCMAP and
+t-SNE less than UMAP. t-SNE and TriMap cannot be told from the linear
+methods. The phantom rate and the adjusted overlap give the same groups.
+
+\subsection*{Findings}
+
+\begin{itemize}
+  \item Every method hides most of the top 5\% on most datasets. PCA and
+    the random projection hide more than half on 11 of 15, UMAP and t-SNE
+    on all 15. No method is best everywhere: PCA hides least on six
+    datasets, the random projection on four, t-SNE and TriMap on two each.
+  \item Read at $k = 20$, the UMAP, t-SNE and PaCMAP pictures rank the
+    labelled anomalies \emph{below} the normal points (AUC under 0.5) on
+    9, 8 and 7 of the 15 datasets; PCA, the random projection and TriMap
+    never do. Under the multi-scale reading this happens on 1, 0 and 2.
+  \item Of the 1,496 labelled anomalies in the original top 5\%, the
+    picture hides 50\% under PCA, 47\% under a random projection, 65\%
+    under TriMap, 73\% under t-SNE, 81\% under UMAP and 84\% under PaCMAP.
+  \item The phantom rate stays within 0.05 of the masking rate in 90\% of
+    runs, as expected at 2D.
+  \item The multi-scale candidate lowers the neighbour-based methods'
+    masking rates by 0.09 to 0.11 on average and moves the linear ones by a
+    median of 0.012. Under it t-SNE and TriMap move level with PCA, and only
+    TriMap against PaCMAP stays significant. How a picture is read decides
+    part of the answer, so which reading to keep matters.
+\end{itemize}
+
+\subsection*{Open, for the supervisor}
+
+The full list, each question with the decision taken so the work could
+continue, is in \texttt{docs/QUESTIONS.md}. The most pressing:
+\begin{enumerate}
+  \item Keep version 1, as the rule fixed in advance requires, or adopt the
+    multi-scale candidate, which missed two of four criteria narrowly but
+    reads clumps the way a person probably would?
+  \item The verdicts depend on the detector: LOF orders the methods
+    differently from kNN. Is kNN acceptable as the benchmark's detector,
+    with LOF added on the continuous datasets in week 7?
+  \item The benchmark split is still marked as proposed. Confirm it?
+\end{enumerate}

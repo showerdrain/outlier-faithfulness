@@ -6,6 +6,105 @@ is marked, not deleted: the method chapter needs the path as well as the end.
 
 ---
 
+## 2026-10-16 · Week 6: the benchmark in two dimensions
+
+**Why.** Week 6 of the plan: run the benchmark on real datasets in two
+dimensions. Protocol and results in `docs/BENCHMARK.md`.
+
+**Order of work.** The projections of the fifteen benchmark datasets (six
+methods, three seeds) were computed while week 5 ran; they do not depend on
+the measure. No outlier score touched benchmark data until week 5 had
+decided. Version 1 is the primary analysis; the multi-scale candidate, the
+anomaly-count budget and a repeat without heavily tied datasets were
+declared as secondary analyses before the run, and seven expectations were
+written down while it ran (`docs/BENCHMARK.md` 2).
+
+**Results** (version 1, kNN at k = 20, top 5%, `results/week6_*.json`):
+- Every method hides most of the top 5% on most datasets: mean masking rate
+  PCA 0.57, random projection 0.60, TriMap 0.69, t-SNE 0.70, UMAP 0.78,
+  PaCMAP 0.78. No method is best everywhere.
+- Friedman p = 0.0007. UMAP and PaCMAP hide significantly more than PCA, and
+  UMAP more than the random projection (Wilcoxon, Holm). t-SNE and TriMap
+  cannot be told from the linear methods with fifteen datasets.
+- Read at k = 20, the UMAP, t-SNE and PaCMAP pictures rank the labelled
+  anomalies below the normal points (AUC under 0.5) on 9, 8 and 7 of the 15
+  datasets. Under the multi-scale reading this happens on 1, 0 and 2.
+- Labelled anomalies hidden by the picture, of 1,496 in the original top 5%:
+  PCA 50%, random 47%, TriMap 65%, t-SNE 73%, UMAP 81%, PaCMAP 84%.
+- Under the multi-scale reading t-SNE and TriMap move level with PCA, and
+  only TriMap against PaCMAP remains significant.
+
+**Expected against observed.** Five of seven held. Not held: the anchor
+(AUC retained) separates the methods more sharply than the masking rate,
+because of the inversions above. Not testable: no benchmark dataset has
+heavily tied scores, so the repeat without them removed nothing.
+
+**For the supervisor.** `docs/QUESTIONS.md`, questions 12 to 19; question 7
+(which reading) now has the benchmark beside it.
+
+---
+
+## 2026-10-16 · Week 5: sanity checks; a multi-scale revision not adopted
+
+**Why.** Week 5 of the plan: sanity checks, revise the definition. Week 4
+left one large problem (the scale at which the projection is read) and five
+smaller ones (MEASURE.md section 8).
+
+**What was tried.** A multi-scale reading (candidate version 2): both spaces
+read by kNN at k = 20, 50 and 100, each reading divided by its median, each
+point's largest ratio kept. Against version 1, on the development set, with
+five seeds and TriMap added: three other scale sets, LOF through the same
+code, seed stability, per-point trustworthiness and continuity, and a
+score-based alternative to ranks. `src/revise_measure.py`,
+`src/score_check.py`, `src/detectors.py`, `src/quality.py`.
+
+**Rule first.** Eight expectations and an adoption rule were written into
+MEASURE.md 9.1 while the run was going, before its results were read (the
+first shuttle lines had been printed, which the record says). Adopt the
+candidate if it passes the known-answer checks, moves the linear methods'
+verdicts by at most 0.10, depends on its scales less than version 1 depends
+on k, and is at most 0.05 worse in seed stability (Jaccard of the masked
+sets).
+
+**Outcome.** Version 1 stays. The candidate passed the known-answer checks
+(56 of 56, among them a new clumped fixture where version 1 calls a far-away
+clump of 40 outliers hidden and the candidate none) and the scale test (89%
+of runs within 0.10 under other scale sets, against 71% for version 1 under
+other k). It missed the other two narrowly: shuttle under PCA moved 0.101,
+and seed stability fell by 0.056. The benchmark runs it beside version 1 as a
+declared secondary analysis, so the supervisor can reverse the decision
+without a re-run (QUESTIONS.md 7).
+
+**Findings.**
+- *Detector dependence.* LOF goes through the definition unchanged and stays
+  close to calibrated, but orders the methods differently from kNN on the
+  three continuous datasets (rank correlation +0.85, -0.43, +0.26). On magic,
+  kNN says the neighbour-based methods hide far more than the linear ones;
+  LOF says all hide about the same. Statements about methods must name the
+  detector. QUESTIONS.md 9.
+- *Not redundant with continuity, except for linear maps.* For PCA and random
+  projections, per-point continuity finds the masked points (median AUC
+  0.90). For the neighbour-based methods the points they hide keep their
+  original neighbours better than the points they keep (median AUC 0.24
+  under version 1): they are moved into the picture with their neighbours and
+  packed into clumps.
+- *Ranks stay.* Score ratios drift with the dimension of the space (on wbc
+  the top 5% goes from 5.1 times the median at nine dimensions to 20.1 at
+  two); Gaussian scaling saturates at the top.
+- *Seeds.* A random projection's per-point calls depend on the seed above
+  all (16% of the top 5% gets the same call under five seeds). t-SNE is the
+  steadiest method.
+- *TriMap* behaves like the other neighbour-based methods (61 to 97% masked
+  under version 1), and is the least stable under the candidate (fault: 0.49
+  to 0.97 over seeds).
+
+**Changed in the code, not in the definition.** Detectors are read off the
+neighbour graph at one scale or several (`detectors.py`); the null takes any
+detector and scales, and reproduces version 1 bit for bit with one scale;
+TriMap 1.1.4 is pinned and made reproducible (numba seeded, one thread).
+
+---
+
 ## 2026-10-16 · Measure v1 reviewed before delivery
 
 **Why.** The v1 work below was written in a session that ended before it was
