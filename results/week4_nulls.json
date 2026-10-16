@@ -1,0 +1,262 @@
+[
+ {
+  "dataset": "shuttle",
+  "null": "half-reference, B=100 (v1)",
+  "exits": 626,
+  "entries": 626,
+  "masked": 569,
+  "phantom": 497,
+  "agreement_with_v1_masked": 1.0,
+  "note": "every point scored against random halves, k/2 neighbours"
+ },
+ {
+  "dataset": "shuttle",
+  "null": "half-reference, B=50, other seed",
+  "exits": 626,
+  "entries": 626,
+  "masked": 576,
+  "phantom": 487,
+  "agreement_with_v1_masked": 0.9741379310344828,
+  "note": "stability of the v1 null to its own Monte Carlo"
+ },
+ {
+  "dataset": "shuttle",
+  "null": "k-variation, k = 10..40",
+  "exits": 626,
+  "entries": 626,
+  "masked": 562,
+  "phantom": 497,
+  "agreement_with_v1_masked": 0.9300341296928327,
+  "note": "displacement beyond what changing the detector's k does"
+ },
+ {
+  "dataset": "shuttle",
+  "null": "feature permutation (scDEED-style)",
+  "exits": 626,
+  "entries": 626,
+  "masked": 84,
+  "phantom": 0,
+  "agreement_with_v1_masked": 0.14762741652021089,
+  "note": "pooled cut-offs -4.76 / +3.68 bits",
+  "cutoff_masked_bits": -4.761616632080922,
+  "cutoff_phantom_bits": 3.6782220041473908
+ },
+ {
+  "dataset": "shuttle",
+  "null": "none: any boundary crossing",
+  "exits": 626,
+  "entries": 626,
+  "masked": 626,
+  "phantom": 626,
+  "agreement_with_v1_masked": 0.9089456869009584,
+  "note": "the placeholder's rule"
+ },
+ {
+  "dataset": "wbc",
+  "null": "half-reference, B=100 (v1)",
+  "exits": 1,
+  "entries": 1,
+  "masked": 0,
+  "phantom": 0,
+  "agreement_with_v1_masked": 1.0,
+  "note": "every point scored against random halves, k/2 neighbours"
+ },
+ {
+  "dataset": "wbc",
+  "null": "half-reference, B=50, other seed",
+  "exits": 1,
+  "entries": 1,
+  "masked": 0,
+  "phantom": 0,
+  "agreement_with_v1_masked": 1.0,
+  "note": "stability of the v1 null to its own Monte Carlo"
+ },
+ {
+  "dataset": "wbc",
+  "null": "k-variation, k = 10..40",
+  "exits": 1,
+  "entries": 1,
+  "masked": 1,
+  "phantom": 0,
+  "agreement_with_v1_masked": 0.0,
+  "note": "displacement beyond what changing the detector's k does"
+ },
+ {
+  "dataset": "wbc",
+  "null": "feature permutation (scDEED-style)",
+  "exits": 1,
+  "entries": 1,
+  "masked": 0,
+  "phantom": 0,
+  "agreement_with_v1_masked": 1.0,
+  "note": "pooled cut-offs -2.85 / +1.89 bits",
+  "cutoff_masked_bits": -2.8531856054261815,
+  "cutoff_phantom_bits": 1.894243926622408
+ },
+ {
+  "dataset": "wbc",
+  "null": "none: any boundary crossing",
+  "exits": 1,
+  "entries": 1,
+  "masked": 1,
+  "phantom": 1,
+  "agreement_with_v1_masked": 0.0,
+  "note": "the placeholder's rule"
+ },
+ {
+  "dataset": "ionosphere",
+  "null": "half-reference, B=100 (v1)",
+  "exits": 18,
+  "entries": 18,
+  "masked": 18,
+  "phantom": 18,
+  "agreement_with_v1_masked": 1.0,
+  "note": "every point scored against random halves, k/2 neighbours"
+ },
+ {
+  "dataset": "ionosphere",
+  "null": "half-reference, B=50, other seed",
+  "exits": 18,
+  "entries": 18,
+  "masked": 18,
+  "phantom": 18,
+  "agreement_with_v1_masked": 1.0,
+  "note": "stability of the v1 null to its own Monte Carlo"
+ },
+ {
+  "dataset": "ionosphere",
+  "null": "k-variation, k = 10..40",
+  "exits": 18,
+  "entries": 18,
+  "masked": 18,
+  "phantom": 18,
+  "agreement_with_v1_masked": 1.0,
+  "note": "displacement beyond what changing the detector's k does"
+ },
+ {
+  "dataset": "ionosphere",
+  "null": "feature permutation (scDEED-style)",
+  "exits": 18,
+  "entries": 18,
+  "masked": 1,
+  "phantom": 0,
+  "agreement_with_v1_masked": 0.05555555555555555,
+  "note": "pooled cut-offs -5.98 / +6.08 bits",
+  "cutoff_masked_bits": -5.978351435312328,
+  "cutoff_phantom_bits": 6.083188327751645
+ },
+ {
+  "dataset": "ionosphere",
+  "null": "none: any boundary crossing",
+  "exits": 18,
+  "entries": 18,
+  "masked": 18,
+  "phantom": 18,
+  "agreement_with_v1_masked": 1.0,
+  "note": "the placeholder's rule"
+ },
+ {
+  "dataset": "fault",
+  "null": "half-reference, B=100 (v1)",
+  "exits": 59,
+  "entries": 59,
+  "masked": 57,
+  "phantom": 58,
+  "agreement_with_v1_masked": 1.0,
+  "note": "every point scored against random halves, k/2 neighbours"
+ },
+ {
+  "dataset": "fault",
+  "null": "half-reference, B=50, other seed",
+  "exits": 59,
+  "entries": 59,
+  "masked": 57,
+  "phantom": 58,
+  "agreement_with_v1_masked": 1.0,
+  "note": "stability of the v1 null to its own Monte Carlo"
+ },
+ {
+  "dataset": "fault",
+  "null": "k-variation, k = 10..40",
+  "exits": 59,
+  "entries": 59,
+  "masked": 58,
+  "phantom": 57,
+  "agreement_with_v1_masked": 0.9491525423728814,
+  "note": "displacement beyond what changing the detector's k does"
+ },
+ {
+  "dataset": "fault",
+  "null": "feature permutation (scDEED-style)",
+  "exits": 59,
+  "entries": 59,
+  "masked": 0,
+  "phantom": 3,
+  "agreement_with_v1_masked": 0.0,
+  "note": "pooled cut-offs -5.78 / +4.46 bits",
+  "cutoff_masked_bits": -5.776843349569944,
+  "cutoff_phantom_bits": 4.459665512318113
+ },
+ {
+  "dataset": "fault",
+  "null": "none: any boundary crossing",
+  "exits": 59,
+  "entries": 59,
+  "masked": 59,
+  "phantom": 59,
+  "agreement_with_v1_masked": 0.9661016949152542,
+  "note": "the placeholder's rule"
+ },
+ {
+  "dataset": "magic",
+  "null": "half-reference, B=100 (v1)",
+  "exits": 392,
+  "entries": 392,
+  "masked": 369,
+  "phantom": 371,
+  "agreement_with_v1_masked": 1.0,
+  "note": "every point scored against random halves, k/2 neighbours"
+ },
+ {
+  "dataset": "magic",
+  "null": "half-reference, B=50, other seed",
+  "exits": 392,
+  "entries": 392,
+  "masked": 369,
+  "phantom": 372,
+  "agreement_with_v1_masked": 0.9838709677419355,
+  "note": "stability of the v1 null to its own Monte Carlo"
+ },
+ {
+  "dataset": "magic",
+  "null": "k-variation, k = 10..40",
+  "exits": 392,
+  "entries": 392,
+  "masked": 383,
+  "phantom": 379,
+  "agreement_with_v1_masked": 0.9583333333333334,
+  "note": "displacement beyond what changing the detector's k does"
+ },
+ {
+  "dataset": "magic",
+  "null": "feature permutation (scDEED-style)",
+  "exits": 392,
+  "entries": 392,
+  "masked": 12,
+  "phantom": 6,
+  "agreement_with_v1_masked": 0.032520325203252036,
+  "note": "pooled cut-offs -5.24 / +3.78 bits",
+  "cutoff_masked_bits": -5.240329001528824,
+  "cutoff_phantom_bits": 3.77902879386719
+ },
+ {
+  "dataset": "magic",
+  "null": "none: any boundary crossing",
+  "exits": 392,
+  "entries": 392,
+  "masked": 392,
+  "phantom": 392,
+  "agreement_with_v1_masked": 0.9413265306122449,
+  "note": "the placeholder's rule"
+ }
+]

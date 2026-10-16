@@ -6,6 +6,86 @@ is marked, not deleted: the method chapter needs the path as well as the end.
 
 ---
 
+## 2026-10-16 · Measure v1 defined and tested on the development set
+
+**Why.** Week 4 of the plan: first definition of the measure, tested on the
+exploration set. The placeholder had four known faults: no null model, a
+shortlist cut that was arbitrary among tied scores, masked and phantom counts
+equal by arithmetic, and a displacement dominated by the bulk of inliers.
+
+**Definition** (full argument in `docs/MEASURE.md`). Same detector on both
+sides. Per point, displacement in bits, `log2(rank_original / rank_projection)`,
+with average ranks and tolerance-based ties. A shortlist crossing counts as a
+failure only if it lies beyond a per-point noise null: 100 re-rankings of the
+original space, each scoring every point against a random half of the data
+with k/2 neighbours. Masked and phantom calls are made separately. The
+aggregates are masking rate, phantom rate and a chance-adjusted shortlist
+overlap. Default budget: the top 5% of points. Labels are not used by the
+measure, only to say what failures cost.
+
+**Decisions, each with its evidence.**
+- *Log-rank displacement.* A move from rank 1 to 64 is -6 bits; 1001 to 1064
+  is -0.09. The placeholder scored them the same.
+- *Ties resolved by the data.* A tied group is wholly in or out of a shortlist.
+  Replaces the stable sort.
+- *Budget top 5%, not the anomaly count.* Three of five development datasets
+  have about 35% anomalies. The anomaly-count budget is still reported.
+- *Resampling null, not the scDEED-style permutation null.* The permutation
+  version calls almost nothing (1 of 18 exits on ionosphere, where PCA's 2D
+  shortlist shares nothing with the original's), because on structureless data
+  every projection destroys the ranking. The resampling null is calibrated
+  (2-3% false calls when the null holds, at alpha 5%), stable to its own seed
+  (masked sets agree 97-100%), and agrees with a k-variation null (93-96%).
+- *Permutation kept as the chance level* of the aggregate (adjusted overlap, 0
+  at chance), in the form of the Campos et al. (2016) adjustment.
+
+**Checks.** `validate.py` now has 44, all passing, including the new section
+H: rotation leaves everything unmoved, antisymmetry, monotone invariance,
+chance level, calibration of the null, and the planted outliers (17-20 of 20
+hidden ones called masked, all 20 visible ones retained).
+
+**Results** (2D, top 5%; `results/week4_*.json`, `figures/week4_*.png`):
+- PCA masks 0% (wbc), 39% (magic), 57% (shuttle), 58% (fault), 100%
+  (ionosphere). Masking falls with target dimension and reaches zero by full
+  dimension on all five.
+- UMAP masks 61-100%, t-SNE 70-93%, PaCMAP 85-100%: more than PCA or a random
+  projection on four datasets of five. UMAP and PaCMAP are at chance level on
+  several.
+- Aggregate correlations miss it. On ionosphere, PCA keeps Spearman 0.56 and
+  the Schubert et al. weighted correlation 0.55 while its shortlist shares
+  nothing with the original's.
+- The null matters at the boundary. With PCA to 6D on shuttle, 46 points
+  still leave the shortlist but all are within noise, so masking is 0. The
+  placeholder would have counted 46 failures.
+
+**Corrections to earlier beliefs.**
+- *Shuttle is not a control for PCA.* PCA to 2D hides 57% of its top 5%. The
+  September "nothing is lost" rested on AUC retained and Spearman, both
+  bulk-dominated. Its median LID of about 2 is local; globally it spans six
+  linear dimensions (PCA needs six components for all the variance), and
+  masking only vanishes at d = 6.
+- *wbc is a clean control only for PCA.* t-SNE and PaCMAP mask 81% and 97%.
+
+**Found along the way.** The neighbour-based methods gather isolated outliers
+into tight clumps. Read at k = 20 the clumps look dense, so their points count
+as masked. Read at k = 50, wbc's clumped outliers are back near the top. On
+shuttle, ionosphere and magic the UMAP, t-SNE and PaCMAP verdicts hold at every
+scale from k = 5 to 100. On wbc and fault they depend on the scale. Here the
+projection itself creates clustered anomalies, the case the September notes
+flagged as the domain's sharpest question. `src/scale_check.py`,
+`results/week4_scale.json`.
+
+**Open, for the supervisor.**
+1. Resampling null per point, permutation only for the chance level. Acceptable?
+2. Budget: top 5% instead of the anomaly count?
+3. How to read the projection: same k (the proposal's rule, v1), several
+   scales reported, or a multi-scale score? Decides how the UMAP result is
+   stated.
+4. Keep shuttle as the case where local and global dimension differ?
+5. Ranks (v1) or normalised scores (Kriegel et al. 2011) for v2?
+
+---
+
 ## 2026-10-15 · Dataset screen and proposed split
 
 **Status: proposed, pending supervisor confirmation.** Record in
@@ -72,6 +152,8 @@ satellite, musk and optdigits, all three rejected.
    Option: move satimage2 to development, leaving a benchmark of 14.
 3. Three development datasets have about 35% anomalies. For developing a
    top-rank measure, downsample the anomaly class (as Campos et al. 2016 do)?
+   *2026-10-16:* the measure now uses a label-free budget (top 5%), which
+   makes this less pressing for development.
 4. A benchmark size cap (20,000 proposed) and whether k should scale with n.
 
 ---
@@ -145,6 +227,8 @@ Shuttle still has 4 points tied at the shortlist boundary; that is real.
   and gave 2,043 vs 2,044 for the same shuttle shortlist on two machines. A
   stable sort makes the answer reproducible, not principled; the tie policy
   is still open (see Schubert, Wojdanowski, Zimek & Kriegel, SDM 2012).
+  *Superseded 2026-10-16:* ties are now resolved by average ranks, so a tied
+  group is wholly in or out of a shortlist.
 - **Cross-platform reproducibility.** Loading, neighbour graphs, kNN scores,
   LID and PCA reproduce bit for bit between Windows and Linux. UMAP and t-SNE
   do not (continuity 0.747 vs 0.767 on the same toy data, same seed). Method

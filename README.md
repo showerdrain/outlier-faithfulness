@@ -7,6 +7,7 @@ Supervisor: Arthur Zimek. Co-supervisor: Muhammad Rajabinasab.
 
     src/            code
     docs/LOG.md     dated record of decisions and the evidence for each
+    docs/MEASURE.md the faithfulness measure: definition, reasons, test results
     data/raw/       downloaded datasets, untouched
     data/processed/ loader output in a uniform format
     cache/          computed artifacts, chiefly kNN graphs
@@ -14,9 +15,13 @@ Supervisor: Arthur Zimek. Co-supervisor: Muhammad Rajabinasab.
     figures/        plots
 
 Everything under data/, cache/, results/ and figures/ is gitignored, with
-three exceptions that record which data the thesis uses and why:
-results/dataset_table.json, results/screen_table.json, results/splits.json.
-The repo reconstructs everything else from a clean checkout.
+exceptions that record which data the thesis uses and what the measure was
+tested against: results/dataset_table.json, results/screen_table.json,
+results/splits.json, and the week-4 results results/week4_measure.json,
+results/week4_nulls.json and results/week4_scale.json (UMAP and t-SNE do not
+reproduce bit for bit across machines, so the numbers the definition was
+judged on are kept). The repo reconstructs everything else from a clean
+checkout.
 
 ## Setup (Windows, PowerShell)
 
@@ -32,8 +37,11 @@ The repo reconstructs everything else from a clean checkout.
 | `datasets.py` | loads any of the 47 ADBench datasets in one uniform form; writes the provenance table |
 | `neighbors.py` | nearest-neighbour graph per dataset (cached), kNN outlier score, per-point LID |
 | `projections.py` | projections to low dimension (cached), and scoring in the projected space |
-| `measure.py` | placeholder faithfulness measure: per-point displacement, shortlist table and figure |
-| `validate.py` | **run after any change to the four files above.** 31 checks with known answers |
+| `measure.py` | the outlier-faithfulness measure, version 1; definition in `docs/MEASURE.md` |
+| `validate.py` | **run after any change to the four files above.** 44 checks with known answers |
+| `explore_measure.py` | week 4: tests the measure on the development datasets, and refuses any other |
+| `figures_week4.py` | figures for the week-4 tests (`explore_measure.py --figures` redraws them) |
+| `scale_check.py` | week 4: how the verdicts depend on the neighbourhood scale used to read the projection |
 | `screen.py` | screens all datasets against stated criteria; records the development/benchmark split |
 | `smoke_test.py` | confirms every library installs and runs |
 
@@ -51,4 +59,7 @@ The repo reconstructs everything else from a clean checkout.
 - Compare floats with a tolerance, never `==`. Exact equality has already
   given different answers on Windows and Linux three times.
 - Measure-design decisions are made on the development datasets only
-  (`results/splits.json`), never on benchmark datasets.
+  (`results/splits.json`), never on benchmark datasets. `explore_measure.py`
+  reads the list from there and refuses anything else.
+- Ranks with ties use `measure.desc_ranks()`: tolerance-based, average ranks.
+  Never `argsort` for a shortlist; that is how the cut became machine-dependent.

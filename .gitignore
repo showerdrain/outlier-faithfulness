@@ -22,3 +22,6 @@ figures/*
 !results/dataset_table.json
 !results/screen_table.json
 !results/splits.json
+!results/week4_measure.json
+!results/week4_nulls.json
+!results/week4_scale.json
