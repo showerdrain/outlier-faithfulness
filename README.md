@@ -1,8 +1,3 @@
-# Outlier detection on low-dimensional projections
-
-MSc thesis, Data Science (ICT Systems), SDU Odense.
-Supervisor: Arthur Zimek. Co-supervisor: Muhammad Rajabinasab.
-
 ## Layout
 
     src/            code
