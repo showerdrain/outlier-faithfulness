@@ -25,3 +25,4 @@ figures/*
 !results/week4_measure.json
 !results/week4_nulls.json
 !results/week4_scale.json
+!results/week4_lattice.json

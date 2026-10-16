@@ -1,0 +1,161 @@
+% docs/week4.tex
+% Week 4: the outlier-faithfulness measure, version 1, tested on the
+% exploration set. The same content as docs/MEASURE.md (sections 2, 4, 5
+% and 7), shortened. Needs amsmath and amssymb only. There is no
+% bibliography: references are written out in the text.
+%
+% Use: paste into progress.tex, or put \input{week4} in main.tex.
+% Numbers: results/week4_measure.json and results/week4_lattice.json,
+% written by src/explore_measure.py and src/lattice_check.py.
+
+\section*{Week 4: outlier faithfulness, version 1}
+
+Built and tested on the exploration set only: shuttle, wbc, ionosphere,
+fault and magic. The repository calls these five the development set. No
+benchmark dataset was used. Version 1 will change in week 5 and is frozen
+in week 12.
+
+\subsection*{Definition}
+
+Let $x_1, \dots, x_n \in \mathbb{R}^D$ be the data and
+$y_1, \dots, y_n \in \mathbb{R}^d$ a projection of it. The same detector
+scores both spaces: $a_i$ is the distance from $x_i$ to its $k$-th nearest
+neighbour among the other points, and $b_i$ the same for $y_i$, with
+$k = 20$. Outlying in the projection therefore means ranked high by the
+detector run on the projected coordinates.
+
+\paragraph{Ranks.} $\rho_a(i)$ is the descending rank of $a_i$, with
+$\rho_a(i) = 1$ for the most outlying point. Scores within a relative
+tolerance of $10^{-9}$ count as tied, and tied points share the average of
+the positions they span. $\rho_b$ is defined the same way.
+
+\paragraph{Displacement,} in bits:
+\begin{equation*}
+  \lambda_i = \log_2 \frac{\rho_a(i)}{\rho_b(i)} .
+\end{equation*}
+A negative value means the projection moved the point towards the crowd, a
+positive value towards the edge. $|\lambda_i|$ counts rank doublings, so a
+move from rank 1 to rank 64 is $-6$ and a move from rank 1001 to rank 1064
+is $-0.09$. The top of the ranking, where an analyst looks, dominates.
+
+\paragraph{Shortlists.} With budget $m = \lceil 0.05\, n \rceil$,
+$S_a = \{ i : \rho_a(i) \le m \}$ and $S_b = \{ i : \rho_b(i) \le m \}$. A
+tied group shares one rank, so it is wholly in or wholly out.
+
+\paragraph{Noise null.} For $r = 1, \dots, 100$, draw a random half $H_r$
+of the points and score every point by its distance to the $(k/2)$-th
+nearest neighbour within $H_r$, itself excluded. Ranking all $n$ points
+gives $\rho^{(r)}$. The null for point $i$ is the set of differences
+$D_i^{(rs)} = \log_2 \rho^{(r)}(i) - \log_2 \rho^{(s)}(i)$ over all pairs
+$r < s$, and
+\begin{equation*}
+  p_i = \tfrac{1}{2} \Pr_{r<s}\bigl( |D_i^{(rs)}| \ge |\lambda_i| \bigr)
+\end{equation*}
+is the one-sided p-value in the direction the point moved. The null asks how
+far the point's rank moves between two equally valid measurements of the
+original data. It does not involve the projection, so it is computed once
+per dataset.
+
+\paragraph{Calls,} at level $\alpha = 0.05$:
+\begin{center}
+\begin{tabular}{lll}
+\hline
+category & rule & meaning \\
+\hline
+retained & $i \in S_a \cap S_b$ & kept on the shortlist \\
+masked & $i \in S_a \setminus S_b$ and $p_i < \alpha$ & hidden, beyond noise \\
+phantom & $i \in S_b \setminus S_a$ and $p_i < \alpha$ & promoted, beyond noise \\
+ambiguous & crossed, $p_i \ge \alpha$ & crossed within noise \\
+\hline
+\end{tabular}
+\end{center}
+
+\paragraph{Aggregates.}
+\begin{equation*}
+  \mathrm{MR} = \frac{|M|}{|S_a|}, \qquad
+  \mathrm{PR} = \frac{|P|}{|S_b|}, \qquad
+  \mathrm{AO} = \frac{O - E}{\min(|S_a|, |S_b|) - E},
+\end{equation*}
+where $M$ and $P$ are the masked and phantom points, $O = |S_a \cap S_b|$,
+and $E = |S_a|\,|S_b| / n$ is the overlap expected when the projected scores
+are permuted across points. MR is the share of the detector's shortlist that
+the projection hides, PR the share of the projection's shortlist that is not
+outlying in the data. AO is 1 for identical shortlists and 0 at chance, the
+same adjustment Campos et al.\ (2016) apply to precision at $n$.
+
+\paragraph{Labels} are not used by the measure. A labelled anomaly that is
+not outlying in the original space cannot be masked, which is the
+conditioning on original-space outlyingness the proposal asks for. Labels
+only say what a failure costs: a masked anomaly is a detection lost to the
+projection.
+
+\subsection*{Checks with known answers}
+
+All 44 checks in \texttt{src/validate.py} pass. Among them: an identity
+projection and a rotation move nothing; swapping the two spaces negates
+$\lambda$ and swaps masked with phantom; a monotone rescoring changes
+nothing; shuffled projected scores give an AO of 0 on average; comparing two
+fresh re-measurements of the original data calls 2 to 3\% of crossings at
+$\alpha = 5\%$; and of 20 outliers planted in the directions PCA discards,
+17 to 20 are called masked over five seeds, while all 20 planted in the
+plane PCA keeps are retained.
+
+\subsection*{Results in two dimensions, top 5\%}
+
+Masking rate MR, with the adjusted overlap AO in brackets. Means over
+seeds: PCA is deterministic, the Gaussian random projection has 5
+seeds, and UMAP, t-SNE and PaCMAP 3 each, at library defaults.
+\begin{center}
+\small
+\begin{tabular}{lccccc}
+\hline
+ & shuttle & wbc & ionosphere & fault & magic \\
+\hline
+PCA & 0.57 ($+0.34$) & 0.00 ($+0.91$) & 1.00 ($-0.05$) & 0.58 ($+0.37$) & 0.39 ($+0.56$) \\
+Random & 0.40 ($+0.49$) & 0.37 ($+0.58$) & 0.66 ($+0.31$) & 0.59 ($+0.36$) & 0.38 ($+0.58$) \\
+UMAP & 0.91 ($+0.02$) & 0.61 ($+0.35$) & 1.00 ($-0.05$) & 0.82 ($+0.11$) & 0.85 ($+0.10$) \\
+t-SNE & 0.73 ($+0.18$) & 0.81 ($+0.15$) & 0.85 ($+0.10$) & 0.70 ($+0.25$) & 0.93 ($+0.02$) \\
+PaCMAP & 0.85 ($+0.07$) & 0.97 ($-0.03$) & 1.00 ($-0.05$) & 0.98 ($-0.03$) & 0.89 ($+0.06$) \\
+\hline
+\end{tabular}
+\end{center}
+
+\begin{itemize}
+  \item UMAP, t-SNE and PaCMAP hide 61 to 100\% of the top 5\%, more than PCA
+    or a random projection on four of the five datasets. PaCMAP's shortlist
+    is close to chance on all five (AO at most 0.09).
+  \item PCA hides from 0\% (wbc) to 100\% (ionosphere). The failures fall as
+    PCA keeps more dimensions and vanish by full dimension on all five.
+  \item A random projection hides less than PCA on shuttle and ionosphere,
+    because PCA discards low-variance directions whatever they hold.
+  \item Aggregate correlations miss the shortlist. On ionosphere PCA keeps a
+    Spearman correlation of 0.56, and 0.55 for the weighted correlation of
+    Schubert et al.\ (2012), while its 2D shortlist shares nothing with the
+    original one.
+  \item Shuttle is not a control for PCA, which hides 57\% of its top 5\%:
+    its median LID is about 2 locally, but it spans six linear dimensions.
+    It is also lattice data: all nine features are integers, and its 2D
+    pictures under PCA, UMAP, t-SNE and PaCMAP each break into
+    1,188 to 1,511 small islands of near-identical points
+    (169 under a random projection), against 5 to 65 for magic.
+  \item The neighbour-based methods gather isolated outliers into tight
+    clumps. On wbc and fault their verdict depends on the neighbourhood size
+    used to read the picture; on shuttle, ionosphere and magic it does not.
+\end{itemize}
+
+\subsection*{Open, for the supervisor}
+
+\begin{enumerate}
+  \item A resampling null per point, with permutation kept only for the
+    chance level of AO, because the scDEED-style permutation null calls
+    almost nothing. Is that acceptable?
+  \item Budget: the top 5\% of points, which needs no labels, instead of the
+    number of labelled anomalies?
+  \item How to read the projection: the same $k$ as the original space (the
+    proposal's rule), a profile over several $k$, or a multi-scale score?
+  \item Keep shuttle as the case where local and global dimension differ?
+  \item Lattice data: keep shuttle and wbc as they are and report the effect?
+    The discrete fields of network data will raise the same question.
+  \item Ranks, as now, or normalised scores (Kriegel et al.\ 2011) for
+    version 2?
+\end{enumerate}

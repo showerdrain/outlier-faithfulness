@@ -1,14 +1,16 @@
 # Outlier faithfulness: definition, version 1
 
 Week 4 (16 October 2026). Built and tested on the five development datasets
-only (`results/splits.json`: shuttle, wbc, ionosphere, fault, magic). No
+only (`results/splits.json`: shuttle, wbc, ionosphere, fault, magic). The
+plan in the proposal calls them the exploration set; it is the same five. No
 benchmark dataset was loaded while the definition was being made. Version 1
 will change in week 5. It is frozen in week 12.
 
 Code: `src/measure.py` (the definition), `src/explore_measure.py` and
 `src/scale_check.py` (the tests in section 5), `src/validate.py` sections F and
 H (known-answer checks). Numbers below come from `results/week4_measure.json`,
-`results/week4_nulls.json` and `results/week4_scale.json`.
+`results/week4_nulls.json` and `results/week4_scale.json`. The same definition
+in LaTeX, with the main results table, is in `docs/week4.tex`.
 
 ## 1. The question
 
@@ -144,10 +146,24 @@ measurements of the same data. Four design decisions:
   the projection, so it is computed once per dataset, cached, and shared by
   every method, seed and dimension.
 
-`validate.py` checks its calibration directly. Compare two fresh replicates
-with each other, which is the null hypothesis itself, and the share of
-boundary crossings called significant should stay at or below `alpha`. It is
-2-3% on wbc, ionosphere and fault.
+For the kNN score the half-sampling argument can be made directly, to first
+order. Each of a point's neighbours lands in a random half with probability
+1/2, so its `(k/2)`-th neighbour within the half is its `j`-th neighbour in the
+full data, where `j` has mean `k` and variance about `k`. The full-data `k`-th
+neighbour distance is itself uncertain by about the same amount: the ball it
+defines holds `k ± sqrt(k)` points' worth of the underlying distribution (a
+Poisson count). So a replicate scatters around the full-data ranking about as
+much as the full-data ranking scatters around the truth, and the difference
+of two replicates has the spread of the difference of two independent
+full-data measurements. That difference is what `lambda` is when the
+projection keeps the ranking up to sampling noise.
+
+`validate.py` checks the null's size. Compare two fresh replicates with each
+other, which is the null hypothesis itself, and the share of boundary
+crossings called significant should stay at or below `alpha`. It is 2-3% on
+wbc, ionosphere and fault. This confirms the calls are not inflated; it cannot
+confirm that sampling noise is the right notion of "equally valid", which is
+an argument (above), not a test.
 
 **Why not the permutation null of scDEED.** The proposal named a permutation
 null, with scDEED (Xia et al. 2024) as precedent. scDEED permutes every
@@ -230,7 +246,8 @@ components for 89% of the variance and six for all of it. PCA to 2D therefore
 lays separate low-dimensional pieces on top of each other. Masking falls from
 57% at d = 2 to 2% at d = 5 and 0% at d = 6. Local and global dimensionality are
 different things, and only the global one matters to a linear projection. That
-belongs in the discussion of Question 3.
+belongs in the discussion of Question 3. Shuttle is also lattice data, which
+shapes its neighbour-based pictures (5.9).
 
 ### 5.2 Methods at 2D
 
@@ -271,9 +288,12 @@ What the table says:
   method on four of the five datasets**: UMAP 61-100%, t-SNE 70-93%, PaCMAP
   85-100%, against 0-100% for PCA and 37-66% for a random projection. The
   exception is ionosphere, where PCA already hides everything, t-SNE hides
-  85%, and only the random projection does clearly better. PaCMAP is at chance
-  level (AO between -0.05 and +0.07) on all five datasets, and UMAP is on
-  shuttle and ionosphere. Section 5.6 qualifies this for wbc and fault.
+  85%, and only the random projection does clearly better. PaCMAP's shortlist
+  is close to chance on all five datasets (mean AO between -0.05 and +0.07):
+  at chance on wbc, ionosphere and fault, and above it on shuttle and magic
+  only by a little (p_perm < 0.01, AO at most 0.09). UMAP is at chance on
+  ionosphere and close to it on shuttle (AO 0.00 to 0.03 over three seeds).
+  Section 5.6 qualifies this for wbc and fault.
 - **A random projection keeps more than PCA** on shuttle (40% masked against
   57%) and ionosphere (66% against 100%), as found in October with AUC. It
   loses on wbc. PCA throws away low-variance directions whatever they hold.
@@ -354,7 +374,8 @@ Jaccard overlap of the masked set with v1's.
 
 The v1 null is stable to its own Monte Carlo and agrees closely with a quite
 different notion of noise, the detector's sensitivity to k. The scDEED-style
-permutation null calls almost nothing (cut-offs of 2.9 to 6.0 bits).
+permutation null calls almost nothing: a point must fall 2.9 to 6.0 bits to
+count as masked, and rise 1.9 to 6.1 bits to count as a phantom.
 
 At 2D the null reclassifies few crossings as ambiguous: 9% on shuttle, 6% on
 magic, 3% on fault, none on ionosphere, and the single crossing on wbc. At
@@ -446,9 +467,44 @@ This is not a test of Question 3, which needs per-point modelling (week 10).
 The planted fixture still shows the mechanism in its clean form: outliers in
 the discarded directions have LID about 25 against about 5 for those PCA keeps.
 
+### 5.9 Two of the five are lattice data
+
+Every feature of shuttle and of wbc is a whole number. Shuttle's nine take a
+median of 86 distinct values each; wbc's nine are 1-10 scores, a median of 9
+values each. Ionosphere, fault and magic are continuous. Two consequences
+(`src/lattice_check.py`, `results/week4_lattice.json`):
+
+- **Ties.** Shuttle's 20,000 points take only 8,351 distinct kNN scores, 42%
+  as many as there are points, against 81% on wbc and 99-100% on the three
+  continuous datasets. Distances on a grid repeat. This is why the tie policy
+  (section 3) matters on shuttle and hardly anywhere else.
+- **Shattered pictures.** Shuttle's 2D pictures break into small islands:
+  groups of points whose 10 nearest neighbours all lie inside the group
+  (strongly connected components of the 10-NN graph, seed 0). There are
+  1,188 under PCA, 1,191 under PaCMAP, 1,480 under t-SNE and 1,511 under UMAP,
+  and the largest holds under 2% of the points. A random projection smears
+  the grid most: 169 islands, the largest holding 71%. Magic, with about as
+  many points, gives 5 to 65 islands under every method, with 87% or more of
+  its points in the largest. Tight groups of near-identical points become
+  separate neighbourhoods, and a picture made of a thousand islands has no
+  stable notion of "apart from the rest". Shuttle's results for UMAP, t-SNE
+  and PaCMAP describe the islands as much as the methods.
+
+Network data is full of discrete fields (ports, flags, counts), so the same
+will come back with backdoor. Question 6 in section 7.
+
 ## 6. What v1 does not do
 
 - **The projection-side scale** (5.6) is the largest open problem.
+- **At 2D it is close to a top-m overlap.** When nearly every boundary
+  crossing is far beyond noise, as at 2D, the masking rate sits close to the
+  plain exit rate `1 - O/m`: 0.02 below it on average over every 2D run, at
+  most 0.10 below except on one wbc run with a 12-point shortlist (0.17). AO
+  is the chance-adjusted top-m overlap, in the form of adjusted precision at
+  n. The null earns its place near the boundary and in nearly faithful
+  projections (5.3). What v1 adds over a top-m overlap is the per-point call,
+  the two failure modes kept apart, and the noise null. Whether that adds
+  anything over trustworthiness and continuity is the week-11 test.
 - **Ranks only.** A point far ahead of the next one and a point barely ahead
   are treated alike. A score-based variant, with scores put on a common scale
   as in Kriegel, Kröger, Schubert and Zimek (SDM 2011), is the obvious v2
@@ -481,6 +537,10 @@ the discarded directions have LID about 25 against about 5 for those PCA keeps.
 4. **Shuttle.** Not a control for PCA (5.1). Keep it as the case where local
    and global dimension differ?
 5. **Ranks or normalised scores** for v2 (section 6)?
+6. **Lattice data** (5.9). Shuttle and wbc have only integer features, which
+   tie the kNN scores and shatter shuttle's pictures into islands. Keep them
+   and report the effect, or replace shuttle in the development set? The
+   discrete fields of network data will raise the same question.
 
 ## 8. Week 5
 
@@ -499,3 +559,9 @@ the discarded directions have LID about 25 against about 5 for those PCA keeps.
   displacement in bits; average ranks with tolerance for ties; a per-point
   noise null; masked and phantom called separately; chance-adjusted overlap;
   budget of the top 5%.
+- **v1, review before delivery, 16 October 2026.** No change to the
+  definition or the code of the measure. Reproduced from a clean clone with
+  empty caches. Added: section 5.9 and `src/lattice_check.py` (lattice data);
+  the relation to a top-m overlap (section 6); the first-order argument for
+  the half-sampling null (section 3); question 6; `docs/week4.tex`. Corrected:
+  PaCMAP is close to chance on all five datasets, not at chance on all five.

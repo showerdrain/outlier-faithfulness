@@ -6,6 +6,37 @@ is marked, not deleted: the method chapter needs the path as well as the end.
 
 ---
 
+## 2026-10-16 · Measure v1 reviewed before delivery
+
+**Why.** The v1 work below was written in a session that ended before it was
+delivered. It was reviewed afresh and re-run before reaching the repository.
+
+**Reproduced.** On a fresh clone of the GitHub repository with empty caches:
+44 of 44 checks pass, and `explore_measure.py` and `scale_check.py` rewrite
+the committed result files unchanged.
+
+**Found.**
+- *Two of the five development datasets are lattice data.* Every feature of
+  shuttle and wbc is a whole number. Shuttle's 20,000 points take only 8,351
+  distinct kNN scores, and its 2D pictures under PCA, UMAP, t-SNE and PaCMAP
+  each break into more than a thousand islands of near-identical points (169
+  under a random projection); magic gives 5 to 65. Shuttle's UMAP, t-SNE and
+  PaCMAP results describe those islands as much as the methods. Network data
+  has many discrete fields, so this will return. `src/lattice_check.py`,
+  `results/week4_lattice.json`, MEASURE.md 5.9.
+- *At 2D the masking rate is close to the plain shortlist exit rate* (0.02
+  below it on average), because nearly every crossing is far beyond noise.
+  The null matters near the boundary and in nearly faithful projections.
+  Stated in MEASURE.md section 6, so the non-redundancy argument is not
+  overstated.
+- *Wording corrected:* PaCMAP is close to chance on all five datasets, but
+  significantly above it on shuttle and magic (AO up to 0.09).
+
+**Added for the supervisor:** question 6, lattice data. The definition and
+the code of the measure are unchanged.
+
+---
+
 ## 2026-10-16 · Measure v1 defined and tested on the development set
 
 **Why.** Week 4 of the plan: first definition of the measure, tested on the
