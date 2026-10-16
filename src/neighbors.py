@@ -64,7 +64,8 @@ def knn_graph(X: np.ndarray, k: int) -> tuple[np.ndarray, np.ndarray]:
     return dist.astype(np.float64), idx.astype(np.int32)
 
 
-def knn_to_reference(X: np.ndarray, ref: np.ndarray, k: int) -> np.ndarray:
+def knn_to_reference(X: np.ndarray, ref: np.ndarray, k: int,
+                     return_idx: bool = False):
     """Distances from EVERY point to its k nearest neighbours among X[ref].
 
     Used by the noise null in measure.py, which scores all points against a
@@ -72,14 +73,21 @@ def knn_to_reference(X: np.ndarray, ref: np.ndarray, k: int) -> np.ndarray:
     knn_graph(). Points inside the reference set are queried with
     kneighbors() and no argument, which excludes each point by its index;
     points outside it are queried against the reference set directly.
+
+    With return_idx, also the neighbours' indices, in the numbering of the
+    full X, so detectors that need a neighbour's own neighbourhood (LOF)
+    can read it from that neighbour's row.
     """
     ref = np.asarray(ref, dtype=bool)
     nn = NearestNeighbors(n_neighbors=k, metric=METRIC).fit(X[ref])
     dist = np.empty((len(X), k), dtype=np.float64)
-    dist[ref] = nn.kneighbors()[0]
+    idx = np.empty((len(X), k), dtype=np.int64)
+    dist[ref], idx[ref] = nn.kneighbors()
     if (~ref).any():
-        dist[~ref] = nn.kneighbors(X[~ref])[0]
-    return dist
+        dist[~ref], idx[~ref] = nn.kneighbors(X[~ref])
+    if not return_idx:
+        return dist
+    return dist, np.flatnonzero(ref)[idx].astype(np.int32)
 
 
 def get_knn(

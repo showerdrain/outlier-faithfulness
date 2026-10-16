@@ -31,8 +31,8 @@ from neighbors import get_knn, knn_graph, knn_score
 
 
 # --- the projection methods -------------------------------------------------
-# Only PCA is used at this step. The others are wired up but not exercised
-# until the path is known to be sound; flipping to them is a one-word change.
+# Library defaults throughout, unless a params dict says otherwise; the
+# hyperparameter grid is week 8. Every method takes an explicit seed.
 
 def _pca(X, n_components, seed, **kw):
     # svd_solver="full" rather than the default: the randomised solver is
@@ -67,7 +67,37 @@ def _random(X, n_components, seed, **kw):
                                     random_state=seed).fit_transform(X)
 
 
-METHODS = {"pca": _pca, "umap": _umap, "tsne": _tsne, "pacmap": _pacmap,
+_seed_numba = None
+
+
+def _trimap(X, n_components, seed, n_inliers=12, n_outliers=4, n_random=3, **kw):
+    # TriMap 1.1.4 (Amid & Warmuth), installed without torch; 1.2.0 needs it.
+    # It has no random_state. Triplets are drawn from numba's own random
+    # generator inside parallel loops, so a fixed seed is reproducible only
+    # with that generator seeded and the loops on one thread. Both are set
+    # here and restored afterwards (checked: same seed, identical output).
+    global _seed_numba
+    import numba
+    import trimap
+    if _seed_numba is None:
+        @numba.njit
+        def _seed(s):
+            np.random.seed(s)
+        _seed_numba = _seed
+    state, threads = np.random.get_state(), numba.get_num_threads()
+    np.random.seed(seed)
+    _seed_numba(seed)
+    numba.set_num_threads(1)
+    try:
+        return trimap.TRIMAP(n_dims=n_components, n_inliers=n_inliers,
+                             n_outliers=n_outliers, n_random=n_random,
+                             verbose=False).fit_transform(np.asarray(X, dtype=np.float64))
+    finally:
+        numba.set_num_threads(threads)
+        np.random.set_state(state)
+
+
+METHODS = {"pca": _pca, "umap": _umap, "tsne": _tsne, "pacmap": _pacmap, "trimap": _trimap,
            "random": _random}
 
 

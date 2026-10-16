@@ -22,9 +22,11 @@ pacmap
 # Projection quality metrics
 zadu
 
-# NOT INSTALLED YET, deliberately. trimap 1.2.0 requires torch>=2.1 and
-# annoy>=1.17.3. torch drags in several GB of CUDA packages, and annoy has no
-# Windows wheel so it must compile from source, which needs Microsoft C++
-# Build Tools. Neither is needed before week 6. Install it then, on its own:
-#     pip install trimap
-# trimap
+# TriMap, pinned to 1.1.4 (week 6). 1.2.0 requires torch, which drags in
+# several GB of CUDA packages. 1.1.4 needs annoy, which has no Windows wheel:
+# pip compiles it from source, which needs Microsoft C++ Build Tools (the
+# "Desktop development with C++" workload). trimap imports pkg_resources,
+# which setuptools 82 removed; Python 3.11 venvs ship an older setuptools.
+trimap==1.1.4
+annoy
+setuptools<82

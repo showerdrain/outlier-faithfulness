@@ -37,10 +37,17 @@ Sections
                                  invariance to monotone rescoring, a calibrated
                                  noise null, a chance level of zero, and the
                                  planted outliers masked and nothing else.
+  I  Version 2 and new code      LOF and per-point trustworthiness/continuity
+                                 against scikit-learn and ZADU by absolute
+                                 value; the generalised null equal to v1's for
+                                 one scale; the H properties again for the
+                                 multi-scale kNN and LOF detectors; and the
+                                 clumped-outlier fixture, the case version 2
+                                 exists for.
 
-The planted-outlier fixture in E is a small artificial dataset used only as a
-test with a known answer. It plays no part in any result, and it is not the
-synthetic-data component that was dropped from the proposal.
+The planted-outlier fixtures in E, H and I are small artificial datasets used
+only as tests with a known answer. They play no part in any result, and they
+are not the synthetic-data component that was dropped from the proposal.
 """
 
 from __future__ import annotations
@@ -380,6 +387,166 @@ def section_h() -> None:
           f"hidden masked {min(hid_masked)}-{max(hid_masked)}/20, visible masked "
           f"{max(vis_masked)} at most, visible retained {min(vis_kept)}/20 at least")
 
+
+def clump_fixture(seed: int):
+    """2,000 inliers in 10D and 40 outliers, each alone in its own direction.
+
+    Three 2D pictures share the inliers (their first two coordinates) and
+    place the 40 outliers differently:
+      clumped    one tight group far from the bulk, what UMAP and PaCMAP do
+      scattered  spread on a wide circle, each still alone
+      absorbed   inside the bulk, a genuine loss
+    A faithful reading calls the first two retained and the third masked.
+    """
+    rng = np.random.default_rng(seed)
+    n_in, m, D = 2000, 40, 10
+    X_in = rng.normal(size=(n_in, D))
+    u = rng.normal(size=(m, D))
+    u /= np.linalg.norm(u, axis=1, keepdims=True)
+    X = np.vstack([X_in, 12 * u + rng.normal(scale=0.5, size=(m, D))])
+    Y_in = X_in[:, :2]
+    ang = rng.uniform(0, 2 * np.pi, m)
+    pictures = {
+        "clumped": np.vstack([Y_in, np.array([30.0, 0.0]) + rng.normal(scale=0.05, size=(m, 2))]),
+        "scattered": np.vstack([Y_in, 30 * np.column_stack([np.cos(ang), np.sin(ang)])]),
+        "absorbed": np.vstack([Y_in, rng.normal(size=(m, 2))]),
+    }
+    return X, pictures, np.arange(n_in, n_in + m)
+
+
+def _replicate_scores(X: np.ndarray, rng, detector: str, scales: tuple) -> np.ndarray:
+    """One fresh half-reference re-measurement, as the noise null makes them."""
+    from detectors import combine, scale_scores
+    n = len(X)
+    ref = np.zeros(n, bool)
+    ref[rng.choice(n, n // 2, replace=False)] = True
+    half = tuple(max(1, s // 2) for s in scales)
+    dist, idx = knn_to_reference(X, ref, max(half), return_idx=True)
+    return combine(scale_scores(dist, idx, detector, half))
+
+
+def section_i() -> None:
+    print("\nI. Version 2 (multi-scale) and the week-5 code")
+    import detectors as T
+    import quality as Q
+    from sklearn.neighbors import LocalOutlierFactor
+    from zadu.measures import trustworthiness_continuity as tnc
+
+    X, _, _ = load_dataset("cardio")
+    X = np.asarray(X)
+    errs = []
+    for k in (20, 50):
+        d, i, _ = get_knn("cardio", k=k, verbose=False)
+        ref = -LocalOutlierFactor(n_neighbors=k).fit(X).negative_outlier_factor_
+        errs.append(float(np.max(np.abs(T.lof_from_graph(d, i, k) - ref) / ref)))
+    check("I", "LOF from the neighbour graph agrees with scikit-learn", max(errs) < 1e-9,
+          f"max relative error {max(errs):.1e} at k = 20 and 50")
+
+    X, _, _ = load_dataset("ionosphere")
+    X = np.asarray(X)
+    Y = PCA(n_components=2, svd_solver="full").fit_transform(X)
+    glob, loc = tnc.measure(X, Y, k=K, return_local=True)
+    t, c = Q.local_trust_cont(X, Y, K)
+    diff = max(np.abs(t - loc["local_trustworthiness"]).max(),
+               np.abs(c - loc["local_continuity"]).max())
+    check("I", "per-point trustworthiness and continuity agree with ZADU", diff < 1e-12,
+          f"max absolute difference {diff:.1e}; T {t.mean():.4f}, C {c.mean():.4f}")
+
+    X, _, _ = load_dataset("wbc")
+    X = np.asarray(X)
+    rng = np.random.default_rng(0)
+    old = np.empty((len(X), 10))
+    for b in range(10):
+        ref = np.zeros(len(X), bool)
+        ref[rng.choice(len(X), len(X) // 2, replace=False)] = True
+        old[:, b] = np.log2(M.desc_ranks(knn_to_reference(X, ref, K // 2)[:, -1]))
+    check("I", "the generalised null is version 1's null for one scale",
+          np.array_equal(M.null_log_ranks(X, K, 10, 0), old))
+
+    # LOF only on continuous data: on lattice data (wbc, shuttle) tied distances
+    # run past the stored neighbours and LOF depends on their arbitrary order.
+    for det, names in (("knn", ("wbc", "ionosphere", "fault")), ("lof", ("ionosphere", "fault"))):
+        moved = []
+        for name in names:
+            X, _, _ = load_dataset(name)
+            a = T.score_original(name, det, T.SCALES_V2)
+            b = T.score_space(np.asarray(X), det, T.SCALES_V2)
+            rot = T.score_space(PCA(n_components=X.shape[1], svd_solver="full")
+                                .fit_transform(np.asarray(X)), det, T.SCALES_V2)
+            moved.append(np.count_nonzero(M.displacement(M.desc_ranks(a), M.desc_ranks(b)))
+                         + np.count_nonzero(M.displacement(M.desc_ranks(a), M.desc_ranks(rot))))
+        check("I", f"v2 {det}: identity and rotation move nothing ({', '.join(names)})",
+              sum(moved) == 0, f"{sum(moved)} points moved")
+
+    X, _, _ = load_dataset("fault")
+    X = np.asarray(X)
+    a = T.score_space(X, "knn", T.SCALES_V2)
+    b = T.score_space(PCA(n_components=2, svd_solver="full").fit_transform(X), "knn", T.SCALES_V2)
+    L = M.null_log_ranks(X, K, 100, 0, "knn", T.SCALES_V2)
+    ab, ba = M.summarise(a, b, L), M.summarise(b, a, L)
+    mono = M.summarise(a, b ** 3 + 2.0, L)
+    check("I", "v2: antisymmetry and invariance to monotone rescoring",
+          np.allclose(ab["points"]["lam"], -ba["points"]["lam"])
+          and np.array_equal(ab["points"]["cat"] == M.MASKED, ba["points"]["cat"] == M.PHANTOM)
+          and np.array_equal(mono["points"]["cat"], ab["points"]["cat"]),
+          f"{ab['n_masked']} masked / {ab['n_phantom']} phantom, swapped "
+          f"{ba['n_masked']} / {ba['n_phantom']}")
+
+    for det, names in (("knn", ("wbc", "ionosphere", "fault")), ("lof", ("ionosphere", "fault"))):
+        rates = []
+        for name in names:
+            X, _, _ = load_dataset(name)
+            X = np.asarray(X)
+            L = M.null_log_ranks(X, K, 100, 0, det, T.SCALES_V2)
+            rng = np.random.default_rng(12345)
+            for _ in range(10):
+                r = M.summarise(_replicate_scores(X, rng, det, T.SCALES_V2),
+                                _replicate_scores(X, rng, det, T.SCALES_V2), L)
+                rates.append((r["masking_rate"], r["phantom_rate"]))
+        mr, pr = np.mean([x[0] for x in rates]), np.mean([x[1] for x in rates])
+        check("I", f"v2 {det}: under the null itself, calls stay near alpha = {M.ALPHA}",
+              mr <= 2 * M.ALPHA and pr <= 2 * M.ALPHA,
+              f"mean masking rate {mr:.3f}, phantom rate {pr:.3f} ({', '.join(names)})")
+
+    for det in ("knn", "lof"):
+        hid_masked, vis_masked, vis_kept = [], [], []
+        for seed in range(5):
+            X, g = planted_fixture(seed)
+            vis, hid = np.flatnonzero(g == 1), np.flatnonzero(g == 2)
+            a = T.score_space(X, det, T.SCALES_V2)
+            b = T.score_space(PCA(n_components=2, svd_solver="full").fit_transform(X),
+                              det, T.SCALES_V2)
+            cat = M.summarise(a, b, M.null_log_ranks(X, K, 100, 0, det, T.SCALES_V2),
+                              m=40)["points"]["cat"]
+            hid_masked.append(int((cat[hid] == M.MASKED).sum()))
+            vis_masked.append(int((cat[vis] == M.MASKED).sum()))
+            vis_kept.append(int((cat[vis] == M.RETAINED).sum()))
+        check("I", f"v2 {det}: planted fixture, hidden outliers masked, visible retained",
+              min(hid_masked) >= 15 and max(vis_masked) == 0 and min(vis_kept) == 20,
+              f"hidden masked {min(hid_masked)}-{max(hid_masked)}/20, visible masked "
+              f"{max(vis_masked)} at most, visible retained {min(vis_kept)}/20 at least")
+
+    res = {("v1", p): [] for p in ("clumped", "scattered", "absorbed")}
+    res.update({("v2", p): [] for p in ("clumped", "scattered", "absorbed")})
+    for seed in range(3):
+        X, pictures, out = clump_fixture(seed)
+        for label, scales in (("v1", T.SCALES_V1), ("v2", T.SCALES_V2)):
+            a = T.score_space(X, "knn", scales)
+            L = M.null_log_ranks(X, K, 50, 0, "knn", scales)
+            for p, Y in pictures.items():
+                cat = M.summarise(a, T.score_space(Y, "knn", scales), L, m=40)["points"]["cat"][out]
+                res[(label, p)].append((int((cat == M.MASKED).sum()), int((cat == M.RETAINED).sum())))
+    worst = lambda key, j, f: f(x[j] for x in res[key])
+    check("I", "clumped fixture: v2 keeps a far-away clump of outliers that v1 calls hidden",
+          worst(("v2", "clumped"), 1, min) == 40 and worst(("v1", "clumped"), 0, min) >= 35,
+          f"retained by v2 {worst(('v2', 'clumped'), 1, min)}/40 at least, masked by v1 "
+          f"{worst(('v1', 'clumped'), 0, min)}/40 at least, over three seeds")
+    check("I", "clumped fixture: v2 still keeps scattered outliers and still hides absorbed ones",
+          worst(("v2", "scattered"), 1, min) == 40 and worst(("v2", "absorbed"), 0, min) >= 35,
+          f"scattered retained {worst(('v2', 'scattered'), 1, min)}/40 at least, absorbed "
+          f"masked {worst(('v2', 'absorbed'), 0, min)}/40 at least")
+
+
 if __name__ == "__main__":
     quick = "--quick" in sys.argv
     section_a()
@@ -391,6 +558,7 @@ if __name__ == "__main__":
     if not quick:
         section_g()
     section_h()
+    section_i()
 
     failed = [r for r in _results if not r[2]]
     print(f"\n{len(_results) - len(failed)} of {len(_results)} checks passed.")

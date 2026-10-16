@@ -26,3 +26,8 @@ figures/*
 !results/week4_nulls.json
 !results/week4_scale.json
 !results/week4_lattice.json
+!results/week5_revision.json
+!results/week5_score_check.json
+!results/week5_redundancy_v1.json
+!results/week6_benchmark.json
+!results/week6_stats.json

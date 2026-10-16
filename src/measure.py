@@ -1,14 +1,24 @@
-"""Outlier faithfulness, version 1 (week 4, October 2026).
+"""Outlier faithfulness, version 1 (week 4, October 2026; kept in week 5).
 
 WHAT IT MEASURES. Whether a projection preserves the outlyingness of
 individual points. The same detector, with the same parameters, scores the
 original space and the projected coordinates, and each point's position in
-the two outlier rankings is compared. The detector used so far is the
-distance to the k-th nearest neighbour (k = 20); nothing below depends on
-that choice. "Outlying in a projection" is therefore operationalised as
-"ranked highly by the same detector run on the projected coordinates". That
-is a reproducible algorithmic proxy, not visual salience; the gap between
-the two is still open.
+the two outlier rankings is compared. The detector is the distance to the
+k-th nearest neighbour (k = 20); nothing below depends on that choice.
+"Outlying in a projection" is therefore operationalised as "ranked highly by
+the same detector run on the projected coordinates". That is a reproducible
+algorithmic proxy, not visual salience; the gap between the two is still
+open.
+
+WEEK 5 tested a revision, a multi-scale reading (candidate version 2): every
+space read at k = 20, 50 and 100, each reading divided by its median, each
+point's largest ratio kept (detectors.py). It missed two of the four
+adoption criteria fixed beforehand, both narrowly, so version 1 stands
+(docs/MEASURE.md, section 9). The code below is written for any score and
+any set of scales, so the candidate runs through it unchanged: scores from
+detectors.score_original() and detectors.score_space(), the null from
+get_null(..., scales=detectors.SCALES_V2). With one scale, every function is
+version 1 exactly (validate.py, section I).
 
 The full argument for each choice, the alternatives tried and the evidence
 from the development datasets are in docs/MEASURE.md. In brief:
@@ -167,26 +177,35 @@ def shortlist(rho: np.ndarray, m: float) -> np.ndarray:
 # --- the noise null ---------------------------------------------------------
 
 def null_log_ranks(X: np.ndarray, k: int, B: int = NULL_B,
-                   seed: int = NULL_SEED) -> np.ndarray:
+                   seed: int = NULL_SEED, detector: str = "knn",
+                   scales: tuple[int, ...] | None = None) -> np.ndarray:
     """(n, B) log2-ranks of every point in B half-reference replicates.
 
     Replicate b draws a random half H_b of the points and scores every point
-    by its distance to the (k // 2)-th nearest neighbour within H_b, the point
-    itself excluded. Ranks are then taken over all n points. The scoring goes
-    through neighbors.knn_to_reference(), the same metric and precision as
+    with the detector at each scale s, using s // 2 neighbours within H_b, the
+    point itself excluded, so each neighbourhood holds the same share of the
+    data as s does in the full set. Several scales are combined exactly as in
+    detectors.combine(). Ranks are then taken over all n points. Neighbours
+    come from neighbors.knn_to_reference(), the same metric and precision as
     the main comparison.
+
+    detector="knn" with scales=None is version 1's null (one scale, k), bit
+    for bit: the same random halves and the same k // 2-th distance.
     """
+    from detectors import combine, scale_scores
     from neighbors import knn_to_reference
 
     X = np.asarray(X, dtype=np.float64)
     n = len(X)
-    kh = max(1, k // 2)
+    scales = (k,) if scales is None else tuple(scales)
+    half = tuple(max(1, s // 2) for s in scales)
     rng = np.random.default_rng(seed)
     L = np.empty((n, B))
     for b in range(B):
         ref = np.zeros(n, dtype=bool)
         ref[rng.choice(n, size=n // 2, replace=False)] = True
-        s = knn_to_reference(X, ref, kh)[:, -1]
+        dist, idx = knn_to_reference(X, ref, max(half), return_idx=True)
+        s = combine(scale_scores(dist, idx, detector, half))
         L[:, b] = np.log2(desc_ranks(s))
     return L
 
@@ -222,34 +241,46 @@ def null_pvalues(L: np.ndarray, lam: np.ndarray, chunk: int = 256) -> np.ndarray
 
 
 def get_null(name: str, k: int, B: int = NULL_B, null_seed: int = NULL_SEED,
-             rebuild: bool = False, verbose: bool = True,
+             rebuild: bool = False, verbose: bool = True, detector: str = "knn",
+             scales: tuple[int, ...] | None = None,
              **loader_kw) -> tuple[np.ndarray, dict]:
     """The noise null for one dataset, computed once and cached.
 
     Keyed on the data hash, like the neighbour graph, so a different loading
     option can never return a null computed from different data. null_seed
     draws the half-samples; loader keywords (subsample, seed, ...) pass
-    straight to load_dataset.
+    straight to load_dataset. With detector="knn" and scales=None (version 1)
+    the cache file keeps its version-1 name, so earlier results are reused;
+    any other detector or scale set gets its own file. Scales that do not fit
+    the dataset are dropped (detectors.usable_scales).
     """
     import time
     from config import CACHE
     from datasets import load_dataset
+    from detectors import usable_scales
 
     X, _, meta = load_dataset(name, **loader_kw)
-    path = CACHE / (f"null_{meta['name']}_{meta['data_hash']}_k{k}_B{B}_s{null_seed}_"
-                    f"{NULL_VERSION}.npz")
+    if detector == "knn" and (scales is None or tuple(scales) == (k,)):
+        scales = None
+        path = CACHE / (f"null_{meta['name']}_{meta['data_hash']}_k{k}_B{B}_s{null_seed}_"
+                        f"{NULL_VERSION}.npz")
+    else:
+        scales = usable_scales(tuple(scales or (k,)), meta["n"])
+        tag = "-".join(str(s) for s in scales)
+        path = CACHE / (f"null_{meta['name']}_{meta['data_hash']}_{detector}_K{tag}_B{B}_"
+                        f"s{null_seed}_{NULL_VERSION}.npz")
     if path.exists() and not rebuild:
         return np.load(path)["L"], meta
     if verbose:
-        print(f"  noise null for {name}: {B} half-reference replicates "
-              f"(n={meta['n']}, D={meta['D']}) ...", flush=True)
+        print(f"  noise null for {name}: {B} half-reference replicates, {detector}, "
+              f"scales {scales or (k,)} (n={meta['n']}, D={meta['D']}) ...", flush=True)
     t0 = time.time()
-    L = null_log_ranks(np.asarray(X), k, B, null_seed)
+    L = null_log_ranks(np.asarray(X), k, B, null_seed, detector, scales)
     np.savez_compressed(path, L=L)
     path.with_suffix(".json").write_text(json.dumps(
-        {**meta, "k": k, "k_replicate": max(1, k // 2), "B": B, "null_seed": null_seed,
-         "null_version": NULL_VERSION, "seconds": round(time.time() - t0, 1)},
-        indent=2))
+        {**meta, "k": k, "detector": detector, "scales": list(scales or (k,)),
+         "B": B, "null_seed": null_seed, "null_version": NULL_VERSION,
+         "seconds": round(time.time() - t0, 1)}, indent=2))
     if verbose:
         print(f"    done in {time.time() - t0:.0f}s", flush=True)
     return L, meta

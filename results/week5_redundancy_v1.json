@@ -1,0 +1,302 @@
+[
+ {
+  "dataset": "shuttle",
+  "method": "pca",
+  "masking_rate": 0.569,
+  "phantom_rate": 0.497,
+  "trustworthiness": 0.9391,
+  "continuity": 0.99523,
+  "auc_continuity_masked": 0.797802,
+  "auc_trust_phantom": 0.281429
+ },
+ {
+  "dataset": "shuttle",
+  "method": "random",
+  "masking_rate": 0.371,
+  "phantom_rate": 0.281,
+  "trustworthiness": 0.985444,
+  "continuity": 0.99632,
+  "auc_continuity_masked": 0.791505,
+  "auc_trust_phantom": 0.464653
+ },
+ {
+  "dataset": "shuttle",
+  "method": "umap",
+  "masking_rate": 0.907,
+  "phantom_rate": 0.896,
+  "trustworthiness": 0.989895,
+  "continuity": 0.983189,
+  "auc_continuity_masked": 0.151775,
+  "auc_trust_phantom": 0.452462
+ },
+ {
+  "dataset": "shuttle",
+  "method": "tsne",
+  "masking_rate": 0.739,
+  "phantom_rate": 0.768,
+  "trustworthiness": 0.99953,
+  "continuity": 0.99926,
+  "auc_continuity_masked": 0.168395,
+  "auc_trust_phantom": 0.237408
+ },
+ {
+  "dataset": "shuttle",
+  "method": "pacmap",
+  "masking_rate": 0.841,
+  "phantom_rate": 0.818,
+  "trustworthiness": 0.996779,
+  "continuity": 0.997593,
+  "auc_continuity_masked": 0.449909,
+  "auc_trust_phantom": 0.536167
+ },
+ {
+  "dataset": "shuttle",
+  "method": "trimap",
+  "masking_rate": 0.557,
+  "phantom_rate": 0.561,
+  "trustworthiness": 0.996341,
+  "continuity": 0.998245,
+  "auc_continuity_masked": 0.464303,
+  "auc_trust_phantom": 0.309576
+ },
+ {
+  "dataset": "wbc",
+  "method": "pca",
+  "masking_rate": 0.0,
+  "phantom_rate": 0.0,
+  "trustworthiness": 0.779111,
+  "continuity": 0.850179,
+  "auc_continuity_masked": null,
+  "auc_trust_phantom": null
+ },
+ {
+  "dataset": "wbc",
+  "method": "random",
+  "masking_rate": 0.25,
+  "phantom_rate": 0.25,
+  "trustworthiness": 0.762677,
+  "continuity": 0.844602,
+  "auc_continuity_masked": 1.0,
+  "auc_trust_phantom": 0.888889
+ },
+ {
+  "dataset": "wbc",
+  "method": "umap",
+  "masking_rate": 1.0,
+  "phantom_rate": 1.0,
+  "trustworthiness": 0.855108,
+  "continuity": 0.896399,
+  "auc_continuity_masked": null,
+  "auc_trust_phantom": null
+ },
+ {
+  "dataset": "wbc",
+  "method": "tsne",
+  "masking_rate": 0.833333,
+  "phantom_rate": 0.833333,
+  "trustworthiness": 0.871256,
+  "continuity": 0.886005,
+  "auc_continuity_masked": 0.0,
+  "auc_trust_phantom": 0.35
+ },
+ {
+  "dataset": "wbc",
+  "method": "pacmap",
+  "masking_rate": 0.916667,
+  "phantom_rate": 0.916667,
+  "trustworthiness": 0.85551,
+  "continuity": 0.857902,
+  "auc_continuity_masked": 0.0,
+  "auc_trust_phantom": 0.272727
+ },
+ {
+  "dataset": "wbc",
+  "method": "trimap",
+  "masking_rate": 0.833333,
+  "phantom_rate": 0.833333,
+  "trustworthiness": 0.850507,
+  "continuity": 0.865802,
+  "auc_continuity_masked": 0.0,
+  "auc_trust_phantom": 0.2
+ },
+ {
+  "dataset": "ionosphere",
+  "method": "pca",
+  "masking_rate": 1.0,
+  "phantom_rate": 1.0,
+  "trustworthiness": 0.834972,
+  "continuity": 0.961585,
+  "auc_continuity_masked": null,
+  "auc_trust_phantom": null
+ },
+ {
+  "dataset": "ionosphere",
+  "method": "random",
+  "masking_rate": 0.666667,
+  "phantom_rate": 0.666667,
+  "trustworthiness": 0.741965,
+  "continuity": 0.887381,
+  "auc_continuity_masked": 0.541667,
+  "auc_trust_phantom": 0.236111
+ },
+ {
+  "dataset": "ionosphere",
+  "method": "umap",
+  "masking_rate": 1.0,
+  "phantom_rate": 1.0,
+  "trustworthiness": 0.834273,
+  "continuity": 0.947767,
+  "auc_continuity_masked": null,
+  "auc_trust_phantom": null
+ },
+ {
+  "dataset": "ionosphere",
+  "method": "tsne",
+  "masking_rate": 0.944444,
+  "phantom_rate": 0.944444,
+  "trustworthiness": 0.874864,
+  "continuity": 0.953475,
+  "auc_continuity_masked": 0.058824,
+  "auc_trust_phantom": 0.0
+ },
+ {
+  "dataset": "ionosphere",
+  "method": "pacmap",
+  "masking_rate": 1.0,
+  "phantom_rate": 1.0,
+  "trustworthiness": 0.822988,
+  "continuity": 0.895405,
+  "auc_continuity_masked": null,
+  "auc_trust_phantom": null
+ },
+ {
+  "dataset": "ionosphere",
+  "method": "trimap",
+  "masking_rate": 0.944444,
+  "phantom_rate": 1.0,
+  "trustworthiness": 0.8343,
+  "continuity": 0.909374,
+  "auc_continuity_masked": null,
+  "auc_trust_phantom": null
+ },
+ {
+  "dataset": "fault",
+  "method": "pca",
+  "masking_rate": 0.581633,
+  "phantom_rate": 0.591837,
+  "trustworthiness": 0.847116,
+  "continuity": 0.943711,
+  "auc_continuity_masked": 0.955915,
+  "auc_trust_phantom": 0.692087
+ },
+ {
+  "dataset": "fault",
+  "method": "random",
+  "masking_rate": 0.55102,
+  "phantom_rate": 0.469388,
+  "trustworthiness": 0.763216,
+  "continuity": 0.897433,
+  "auc_continuity_masked": 0.861757,
+  "auc_trust_phantom": 0.443377
+ },
+ {
+  "dataset": "fault",
+  "method": "umap",
+  "masking_rate": 0.826531,
+  "phantom_rate": 0.867347,
+  "trustworthiness": 0.974961,
+  "continuity": 0.970738,
+  "auc_continuity_masked": 0.25641,
+  "auc_trust_phantom": 0.599095
+ },
+ {
+  "dataset": "fault",
+  "method": "tsne",
+  "masking_rate": 0.72449,
+  "phantom_rate": 0.734694,
+  "trustworthiness": 0.984194,
+  "continuity": 0.974116,
+  "auc_continuity_masked": 0.294691,
+  "auc_trust_phantom": 0.536058
+ },
+ {
+  "dataset": "fault",
+  "method": "pacmap",
+  "masking_rate": 0.969388,
+  "phantom_rate": 0.94898,
+  "trustworthiness": 0.963364,
+  "continuity": 0.966061,
+  "auc_continuity_masked": 0.6,
+  "auc_trust_phantom": 0.577061
+ },
+ {
+  "dataset": "fault",
+  "method": "trimap",
+  "masking_rate": 0.72449,
+  "phantom_rate": 0.734694,
+  "trustworthiness": 0.965453,
+  "continuity": 0.974358,
+  "auc_continuity_masked": 0.480563,
+  "auc_trust_phantom": 0.209444
+ },
+ {
+  "dataset": "magic",
+  "method": "pca",
+  "masking_rate": 0.390063,
+  "phantom_rate": 0.392178,
+  "trustworthiness": 0.861091,
+  "continuity": 0.978614,
+  "auc_continuity_masked": 0.943126,
+  "auc_trust_phantom": 0.415055
+ },
+ {
+  "dataset": "magic",
+  "method": "random",
+  "masking_rate": 0.44186,
+  "phantom_rate": 0.440803,
+  "trustworthiness": 0.708446,
+  "continuity": 0.934564,
+  "auc_continuity_masked": 0.956004,
+  "auc_trust_phantom": 0.640197
+ },
+ {
+  "dataset": "magic",
+  "method": "umap",
+  "masking_rate": 0.859408,
+  "phantom_rate": 0.859408,
+  "trustworthiness": 0.970466,
+  "continuity": 0.978605,
+  "auc_continuity_masked": 0.349493,
+  "auc_trust_phantom": 0.698858
+ },
+ {
+  "dataset": "magic",
+  "method": "tsne",
+  "masking_rate": 0.919662,
+  "phantom_rate": 0.918605,
+  "trustworthiness": 0.99403,
+  "continuity": 0.972079,
+  "auc_continuity_masked": 0.221395,
+  "auc_trust_phantom": 0.575988
+ },
+ {
+  "dataset": "magic",
+  "method": "pacmap",
+  "masking_rate": 0.866808,
+  "phantom_rate": 0.863636,
+  "trustworthiness": 0.959254,
+  "continuity": 0.973282,
+  "auc_continuity_masked": 0.553127,
+  "auc_trust_phantom": 0.637998
+ },
+ {
+  "dataset": "magic",
+  "method": "trimap",
+  "masking_rate": 0.942918,
+  "phantom_rate": 0.946089,
+  "trustworthiness": 0.934423,
+  "continuity": 0.985239,
+  "auc_continuity_masked": 0.229652,
+  "auc_trust_phantom": 0.475855
+ }
+]
