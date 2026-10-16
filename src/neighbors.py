@@ -64,6 +64,24 @@ def knn_graph(X: np.ndarray, k: int) -> tuple[np.ndarray, np.ndarray]:
     return dist.astype(np.float64), idx.astype(np.int32)
 
 
+def knn_to_reference(X: np.ndarray, ref: np.ndarray, k: int) -> np.ndarray:
+    """Distances from EVERY point to its k nearest neighbours among X[ref].
+
+    Used by the noise null in measure.py, which scores all points against a
+    random half of the data. Same metric and float64 precision as
+    knn_graph(). Points inside the reference set are queried with
+    kneighbors() and no argument, which excludes each point by its index;
+    points outside it are queried against the reference set directly.
+    """
+    ref = np.asarray(ref, dtype=bool)
+    nn = NearestNeighbors(n_neighbors=k, metric=METRIC).fit(X[ref])
+    dist = np.empty((len(X), k), dtype=np.float64)
+    dist[ref] = nn.kneighbors()[0]
+    if (~ref).any():
+        dist[~ref] = nn.kneighbors(X[~ref])[0]
+    return dist
+
+
 def get_knn(
     name: str,
     k: int = DEFAULT_K,

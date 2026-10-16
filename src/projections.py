@@ -59,7 +59,16 @@ def _pacmap(X, n_components, seed, n_neighbors=10, **kw):
                          random_state=seed).fit_transform(X)
 
 
-METHODS = {"pca": _pca, "umap": _umap, "tsne": _tsne, "pacmap": _pacmap}
+def _random(X, n_components, seed, **kw):
+    # The uninformed baseline: a Gaussian random linear map. Its scaling is
+    # irrelevant, since every comparison here is rank-based.
+    from sklearn.random_projection import GaussianRandomProjection
+    return GaussianRandomProjection(n_components=n_components,
+                                    random_state=seed).fit_transform(X)
+
+
+METHODS = {"pca": _pca, "umap": _umap, "tsne": _tsne, "pacmap": _pacmap,
+           "random": _random}
 
 
 def project(

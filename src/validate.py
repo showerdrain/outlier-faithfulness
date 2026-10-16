@@ -28,8 +28,15 @@ Sections
                                  directions it discards must be masked, with
                                  negative displacement. Validates the sign
                                  convention of the measure end to end.
-  F  Measure arithmetic          small cases worked by hand.
+  F  Measure arithmetic          small cases worked by hand: ranks with ties,
+                                 displacement, shortlists, the chance-adjusted
+                                 overlap.
   G  Random-projection floor     reported, not asserted. See the note there.
+  H  Measure behaviour           properties the v1 measure must have whatever
+                                 the data: zero under rotation, antisymmetry,
+                                 invariance to monotone rescoring, a calibrated
+                                 noise null, a chance level of zero, and the
+                                 planted outliers masked and nothing else.
 
 The planted-outlier fixture in E is a small artificial dataset used only as a
 test with a known answer. It plays no part in any result, and it is not the
@@ -53,8 +60,8 @@ from sklearn.random_projection import GaussianRandomProjection
 
 from config import DEFAULT_K
 from datasets import load_dataset
-from measure import signed_displacement, top_k
-from neighbors import K_CACHE, get_knn, knn_score, lid_mle
+import measure as M
+from neighbors import K_CACHE, get_knn, knn_score, knn_to_reference, lid_mle
 from projections import knn_dist, project
 
 K = DEFAULT_K
@@ -157,11 +164,11 @@ def section_c() -> None:
         d_hd, _, _ = get_knn(name, k=K, verbose=False)
         s_hd = knn_score(d_hd, K)
         s_ld = knn_score(knn_dist(np.asarray(X), K), K)   # X 'projected' onto itself
-        of = signed_displacement(s_hd, s_ld)
+        of = M.displacement(M.desc_ranks(s_hd), M.desc_ranks(s_ld))
         kk = int(y.sum())
-        a, _ = top_k(s_hd, kk)
-        b, _ = top_k(s_ld, kk)
-        overlap = len(set(a.tolist()) & set(b.tolist())) / kk
+        a = M.shortlist(M.desc_ranks(s_hd), kk)
+        b = M.shortlist(M.desc_ranks(s_ld), kk)
+        overlap = (a & b).sum() / a.sum()
         moved = int(np.count_nonzero(of))
         check("C", f"{name}: identity leaves every rank unchanged",
               moved == 0 and overlap == 1.0,
@@ -193,9 +200,9 @@ def section_e() -> None:
         s_hd = knn_score(d_hd, K)
         Y = PCA(n_components=2, svd_solver="full").fit_transform(X)
         s_ld = knn_score(knn_dist(Y, K), K)
-        of = signed_displacement(s_hd, s_ld)
-        top_hd, _ = top_k(s_hd, 40)
-        top_ld, _ = top_k(s_ld, 40)
+        of = M.displacement(M.desc_ranks(s_hd), M.desc_ranks(s_ld))
+        top_hd = np.flatnonzero(M.shortlist(M.desc_ranks(s_hd), 40))
+        top_ld = np.flatnonzero(M.shortlist(M.desc_ranks(s_ld), 40))
         lid = lid_mle(d_hd, K)
         rows.append(dict(
             seed=seed, auc=roc_auc_score(y, s_hd),
@@ -210,16 +217,16 @@ def section_e() -> None:
           all(x["auc"] >= 0.99 for x in r),
           f"AUC {min(x['auc'] for x in r):.4f} or better")
     check("E", "outliers in the kept plane survive projection",
-          all(x["vis_ld"] == 20 and x["of_vis"] >= -0.01 for x in r),
+          all(x["vis_ld"] == 20 and x["of_vis"] >= -0.5 for x in r),
           f"{min(x['vis_ld'] for x in r)}/20 or more stay in the top 40, "
-          f"median displacement {min(x['of_vis'] for x in r):+.3f} at worst")
+          f"median displacement {min(x['of_vis'] for x in r):+.2f} bits at worst")
     check("E", "outliers in the discarded directions are masked",
           all(x["hid_hd"] >= 15 and x["hid_ld"] <= 2 for x in r),
           f"{min(x['hid_hd'] for x in r)}-{max(x['hid_hd'] for x in r)}/20 in the original "
           f"top 40, {max(x['hid_ld'] for x in r)}/20 at most after projection")
     check("E", "masked outliers carry negative displacement (sign convention)",
-          all(x["of_hid"] <= -0.25 for x in r),
-          f"median displacement {max(x['of_hid'] for x in r):+.3f} at best")
+          all(x["of_hid"] <= -2.0 for x in r),
+          f"median displacement {max(x['of_hid'] for x in r):+.2f} bits at best")
     print(f"     (reported) median LID: inliers {np.mean([x['lid_in'] for x in r]):.1f}, "
           f"outliers in kept plane {np.mean([x['lid_vis'] for x in r]):.1f}, "
           f"outliers in discarded directions {np.mean([x['lid_hid'] for x in r]):.1f}")
@@ -227,15 +234,41 @@ def section_e() -> None:
 
 def section_f() -> None:
     print("\nF. Measure arithmetic, worked by hand")
-    of = signed_displacement(np.array([1.0, 2.0, 3.0]), np.array([3.0, 2.0, 1.0]))
-    check("F", "full reversal gives [+2/3, 0, -2/3]",
-          np.allclose(of, [2 / 3, 0, -2 / 3]), f"got {np.round(of, 4).tolist()}")
+    rho = M.desc_ranks(np.array([5.0, 3.0, 3.0, 3.0, 1.0]))
+    check("F", "tied scores share the average of their positions",
+          rho.tolist() == [1.0, 3.0, 3.0, 3.0, 5.0], f"got {rho.tolist()}")
+
     s = np.array([5.0, 3.0, 3.0, 3.0, 1.0])
-    runs = {tuple(top_k(s, 2)[0].tolist()) for _ in range(20)}
-    order, ties = top_k(s, 2)
-    check("F", "top-k is deterministic under ties and reports them",
-          len(runs) == 1 and order.tolist() == [0, 1] and ties == 3,
-          f"order {order.tolist()}, boundary ties {ties}")
+    perm = np.random.default_rng(0).permutation(5)
+    check("F", "ranks do not depend on input order",
+          np.array_equal(M.desc_ranks(s[perm]), M.desc_ranks(s)[perm]))
+
+    near = M.desc_ranks(np.array([2.0, 2.0 * (1 + 1e-13), 1.0]))
+    apart = M.desc_ranks(np.array([2.0, 2.0 * (1 + 1e-6), 1.0]))
+    check("F", "scores within the tolerance tie, scores beyond it do not",
+          near.tolist() == [1.5, 1.5, 3.0] and apart.tolist() == [2.0, 1.0, 3.0],
+          f"1e-13 apart {near.tolist()}, 1e-6 apart {apart.tolist()}")
+
+    lam = M.displacement(M.desc_ranks(np.array([1.0, 2.0, 3.0])),
+                         M.desc_ranks(np.array([3.0, 2.0, 1.0])))
+    check("F", "full reversal gives [+log2 3, 0, -log2 3] bits",
+          np.allclose(lam, [np.log2(3), 0, -np.log2(3)]), f"got {np.round(lam, 4).tolist()}")
+
+    rho = M.desc_ranks(s)
+    in2, in3 = M.shortlist(rho, 2), M.shortlist(rho, 3)
+    check("F", "a tied group straddling the budget is wholly in or wholly out",
+          in2.tolist() == [True, False, False, False, False]
+          and in3.tolist() == [True, True, True, True, False],
+          f"m=2 keeps {int(in2.sum())}, m=3 keeps {int(in3.sum())}")
+
+    n = 100
+    in_a = np.zeros(n, bool); in_a[:10] = True
+    in_b = np.zeros(n, bool); in_b[[0] + list(range(50, 59))] = True
+    ao_chance, _ = M.adjusted_overlap(in_a, in_b)
+    ao_same, p_same = M.adjusted_overlap(in_a, in_a)
+    check("F", "adjusted overlap is 1 for identical shortlists, 0 at chance",
+          np.isclose(ao_same, 1.0) and np.isclose(ao_chance, 0.0) and p_same < 1e-10,
+          f"identical {ao_same:.3f} (p {p_same:.1e}), overlap 1 of 10 at n=100 {ao_chance:.3f}")
 
 
 def section_g() -> None:
@@ -266,6 +299,87 @@ def section_g() -> None:
               f"{100 * keep_p:>13.0f}%{100 * np.mean(keep_r):>11.0f}% ± {100 * np.std(keep_r):.0f}")
 
 
+
+def section_h() -> None:
+    print("\nH. Measure behaviour (development datasets and the planted fixture only)")
+
+    for name in ("wbc", "ionosphere"):
+        X, _, _ = load_dataset(name)
+        X = np.asarray(X)
+        a = knn_score(knn_dist(X, K), K)
+        Y = PCA(n_components=X.shape[1], svd_solver="full").fit_transform(X)
+        lam = M.displacement(M.desc_ranks(a), M.desc_ranks(knn_score(knn_dist(Y, K), K)))
+        check("H", f"{name}: PCA to full dimension (a rotation) moves nothing",
+              np.count_nonzero(lam) == 0, f"max |lambda| {np.abs(lam).max():.1e} bits")
+
+    X, _, _ = load_dataset("fault")
+    X = np.asarray(X)
+    a = knn_score(knn_dist(X, K), K)
+    b = knn_score(knn_dist(PCA(n_components=2, svd_solver="full").fit_transform(X), K), K)
+    L = M.null_log_ranks(X, K, 100, 0)
+    ab = M.summarise(a, b, L)
+    ba = M.summarise(b, a, L)
+    check("H", "swapping the two spaces negates lambda and swaps masked/phantom",
+          np.allclose(ab["points"]["lam"], -ba["points"]["lam"])
+          and np.array_equal(ab["points"]["cat"] == M.MASKED, ba["points"]["cat"] == M.PHANTOM),
+          f"{ab['n_masked']} masked / {ab['n_phantom']} phantom, swapped "
+          f"{ba['n_masked']} / {ba['n_phantom']}")
+    mono = M.summarise(a, b ** 3 + 2.0, L)
+    check("H", "a monotone rescoring of either space changes nothing",
+          np.array_equal(mono["points"]["cat"], ab["points"]["cat"]))
+
+    rng = np.random.default_rng(0)
+    rho_a = M.desc_ranks(a)
+    in_a = M.shortlist(rho_a, M.budget(len(a)))
+    aos, ps = [], []
+    for _ in range(200):
+        ao, p = M.adjusted_overlap(in_a, M.shortlist(M.desc_ranks(rng.permutation(b)),
+                                                      M.budget(len(a))))
+        aos.append(ao)
+        ps.append(p)
+    check("H", "projected scores shuffled across points: adjusted overlap ~ 0",
+          abs(np.mean(aos)) < 0.03 and np.mean(np.array(ps) < 0.05) <= 0.08,
+          f"mean {np.mean(aos):+.3f} over 200 shuffles, "
+          f"{100 * np.mean(np.array(ps) < 0.05):.1f}% with p_perm < 0.05")
+
+    # Size of the noise null: compare two fresh re-measurements of the original
+    # space with each other. That is the null hypothesis itself, so the share of
+    # boundary crossings called significant must stay near alpha.
+    for name in ("wbc", "ionosphere", "fault"):
+        X, _, _ = load_dataset(name)
+        X = np.asarray(X)
+        n = len(X)
+        L = M.null_log_ranks(X, K, 100, 0)
+        rng = np.random.default_rng(12345)
+        mr, pr = [], []
+        for _ in range(20):
+            reps = []
+            for _ in range(2):
+                ref = np.zeros(n, bool)
+                ref[rng.choice(n, n // 2, replace=False)] = True
+                reps.append(knn_to_reference(X, ref, K // 2)[:, -1])
+            r = M.summarise(reps[0], reps[1], L)
+            mr.append(r["masking_rate"])
+            pr.append(r["phantom_rate"])
+        check("H", f"{name}: under the null itself, calls stay near alpha = {M.ALPHA}",
+              np.mean(mr) <= 2 * M.ALPHA and np.mean(pr) <= 2 * M.ALPHA,
+              f"mean masking rate {np.mean(mr):.3f}, phantom rate {np.mean(pr):.3f}")
+
+    hid_masked, vis_masked, vis_kept = [], [], []
+    for seed in range(5):
+        X, g = planted_fixture(seed)
+        vis, hid = np.flatnonzero(g == 1), np.flatnonzero(g == 2)
+        a = knn_score(knn_dist(X, K), K)
+        b = knn_score(knn_dist(PCA(n_components=2, svd_solver="full").fit_transform(X), K), K)
+        cat = M.summarise(a, b, M.null_log_ranks(X, K, 100, 0), m=40)["points"]["cat"]
+        hid_masked.append(int((cat[hid] == M.MASKED).sum()))
+        vis_masked.append(int((cat[vis] == M.MASKED).sum()))
+        vis_kept.append(int((cat[vis] == M.RETAINED).sum()))
+    check("H", "planted fixture: hidden outliers are masked, visible ones retained",
+          min(hid_masked) >= 15 and max(vis_masked) == 0 and min(vis_kept) == 20,
+          f"hidden masked {min(hid_masked)}-{max(hid_masked)}/20, visible masked "
+          f"{max(vis_masked)} at most, visible retained {min(vis_kept)}/20 at least")
+
 if __name__ == "__main__":
     quick = "--quick" in sys.argv
     section_a()
@@ -276,6 +390,7 @@ if __name__ == "__main__":
     section_f()
     if not quick:
         section_g()
+    section_h()
 
     failed = [r for r in _results if not r[2]]
     print(f"\n{len(_results) - len(failed)} of {len(_results)} checks passed.")

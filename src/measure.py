@@ -1,44 +1,95 @@
-"""Outlier faithfulness, placeholder version.
+"""Outlier faithfulness, version 1 (week 4, October 2026).
 
-This is the first draft of the measure the thesis is about. It WILL be
-replaced; the proposal says the definition is unsettled, and week 4 is
-scheduled for a proper one. The point of this version is to prove the
-pipeline runs end to end and to make the failure modes visible.
+WHAT IT MEASURES. Whether a projection preserves the outlyingness of
+individual points. The same detector, with the same parameters, scores the
+original space and the projected coordinates, and each point's position in
+the two outlier rankings is compared. The detector used so far is the
+distance to the k-th nearest neighbour (k = 20); nothing below depends on
+that choice. "Outlying in a projection" is therefore operationalised as
+"ranked highly by the same detector run on the projected coordinates". That
+is a reproducible algorithmic proxy, not visual salience; the gap between
+the two is still open.
 
-Definition, per point i, with ranks taken over outlier score ascending so
-that rank n is the most outlying point:
+The full argument for each choice, the alternatives tried and the evidence
+from the development datasets are in docs/MEASURE.md. In brief:
 
-    OF_i = ( rank_LD(i) - rank_HD(i) ) / n
+Notation: a = detector scores in the original space, b = in the projection,
+n points, m = the shortlist budget (how many points an analyst inspects).
 
-    OF_i < 0   the projection pushed the point toward the crowd
-    OF_i > 0   the projection pushed the point toward the periphery
+1. RANKS. rho(i) is the descending rank of point i, 1 = most outlying.
+   Scores within a relative tolerance TIE_RTOL count as tied, and tied points
+   share the average of the positions they span. Ties are resolved by the
+   data, never by the sort, so the answer cannot depend on the machine.
 
-The two directions are reported separately rather than combined. They are
-different failures with different costs: a masked outlier is an anomaly the
-analyst never sees, a phantom outlier is analyst time spent on nothing.
+2. DISPLACEMENT, in bits:
 
-The aggregate is computed over the top ranks only, because those are the
-points anyone actually inspects. The budget is the true number of anomalies,
-the standard P@n convention in the outlier detection literature.
+       lambda(i) = log2( rho_a(i) / rho_b(i) )
 
-TIES ARE AN OPEN PROBLEM. A hard top-k cut is only well defined if no points
-share a score across the boundary. On shuttle that assumption fails badly:
-49,097 points take only 7,580 distinct kNN-distance values, and four points
-sit on the boundary score exactly. Which of them falls inside the cut is then
-decided by the sort, not by the data.
+   lambda < 0  the projection pushed the point toward the crowd (masking side)
+   lambda > 0  it pushed the point toward the periphery (phantom side)
 
-Sorting here is forced stable so the answer is at least reproducible, and
-boundary_ties is reported so fragile cases are visible rather than silent.
-That is a patch, not a solution. The real version needs an explicit policy:
-break ties by original-space rank, cut on score value rather than position,
-or report the tied band as ambiguous. See Schubert, Wojdanowski, Zimek &
-Kriegel (SDM 2012) on evaluating outlier rankings, which treats this directly.
+   |lambda| counts rank doublings: lambda = -3 puts the point eight times
+   deeper in the projection's ranking than in the original's. It weights the
+   top of the ranking, where an analyst looks: rank 1 -> 64 is -6 bits, rank
+   1001 -> 1064 is -0.09. The placeholder, (rank_LD - rank_HD) / n, scored
+   both moves the same (63 / n), so the bulk of inliers dominated it.
 
-Tie DIAGNOSTICS (boundary_ties, distinct_scores) compare with a relative
-tolerance, TIE_RTOL, never exact equality. The same distances computed by two
-routes agree to about 1e-13 but not bit for bit, so exact-equality counts
-differed between Windows and Linux (backdoor: 84,839 vs 84,837 distinct).
-Differences below 1e-9 relative carry no meaning for an outlier ranking.
+3. SHORTLISTS. S_a = {i : rho_a(i) <= m}, S_b = {i : rho_b(i) <= m}. A tied
+   group shares one rank, so it is wholly in or wholly out, and a shortlist
+   can differ from m by at most half a tied group. This replaces the stable
+   sort, which made the cut reproducible but not principled.
+
+4. NOISE NULL. Not every move across the shortlist boundary is the
+   projection's doing: a point's rank is only as precise as the sample it
+   was estimated from. NULL_B replicate rankings of the ORIGINAL space are
+   made, each scoring every point against a random half of the data with
+   k // 2 neighbours, so the neighbourhood holds the same share of the data.
+   The competitor set stays all n points, as in the real comparison. For a
+   point i, the null distribution of displacement is the set of pairwise
+   differences of its log2-ranks across replicates. Half-sampling gives the
+   variance of a full-sample estimate, as the bootstrap does, without
+   duplicating points (duplicates put zero distances into the neighbour
+   graph). The null depends on the data and the detector only, never on the
+   projection, so it is computed once per dataset and cached.
+
+5. CALLS at budget m and level ALPHA, with p(i) = P_null(|D_i| >= |lambda_i|) / 2,
+   the one-sided p-value in the direction the point moved:
+
+       masked     in S_a, not in S_b, p < ALPHA   hidden beyond noise
+       phantom    in S_b, not in S_a, p < ALPHA   promoted beyond noise
+       ambiguous  crossed the boundary, but within noise
+       retained   in both shortlists
+
+   Masked and phantom counts are no longer equal by construction, as they
+   were under the placeholder's equal budgets.
+
+6. AGGREGATES.
+       masking rate  MR = |masked| / |S_a|   share of the detector's shortlist
+                                             that the projection hides
+       phantom rate  PR = |phantom| / |S_b|  share of the projection's
+                                             shortlist that is not outlying
+       adjusted overlap  AO = (O - E) / (min(|S_a|, |S_b|) - E),
+                     O = |S_a & S_b|, E = |S_a| |S_b| / n, the expected
+                     overlap when the projected scores are permuted across
+                     points. 1 = same shortlist, 0 = no better than chance.
+                     The form follows the chance adjustment of P@n in Campos
+                     et al. (2016). p_perm is the hypergeometric tail.
+   Reported alongside, as the closest existing measure of agreement between
+   two outlier rankings: the weighted correlation of Schubert, Wojdanowski,
+   Zimek & Kriegel (SDM 2012), on rank-normalised scores, with their
+   class-balancing weights (the union of the two shortlists against the rest).
+
+7. GROUND TRUTH. The measure itself never uses labels: it asks whether the
+   projection preserves what the detector sees, so a labelled anomaly that is
+   not outlying in the original space cannot be "masked". That is the
+   conditioning on original-space outlyingness the proposal asked for. Labels
+   are used afterwards, to say what the failures cost: masked anomalies are
+   detections lost to the projection, phantom anomalies are anomalies the
+   projection surfaces that the detector ranked low.
+
+Tie DIAGNOSTICS compare with a relative tolerance, TIE_RTOL, never exact
+equality. The same distances computed by two routes agree to about 1e-13 but
+not bit for bit, so exact-equality counts differed between Windows and Linux.
 """
 
 from __future__ import annotations
@@ -46,162 +97,276 @@ from __future__ import annotations
 import json
 
 import numpy as np
-from scipy.stats import rankdata
+from scipy.stats import hypergeom
 
 TIE_RTOL = 1e-9
+ALPHA = 0.05            # one-sided level of each masked / phantom call
+BUDGET_FRAC = 0.05      # default shortlist: the top 5% of points
+NULL_B = 100            # replicate rankings in the noise null
+NULL_SEED = 0
+NULL_VERSION = "v1"     # bump if null_log_ranks() changes, so caches rebuild
+
+RETAINED, MASKED, EXIT_AMBIGUOUS, PHANTOM, ENTRY_AMBIGUOUS, BACKGROUND = range(6)
+CATEGORY_NAMES = ("retained", "masked", "exit_ambiguous",
+                  "phantom", "entry_ambiguous", "background")
+
+
+# --- ranks and ties ---------------------------------------------------------
+
+def _tie_groups(v_desc: np.ndarray, rtol: float) -> np.ndarray:
+    """Group ids for values sorted in descending order; within rtol = tied."""
+    v = v_desc
+    new = np.ones(len(v), dtype=bool)
+    if len(v) > 1:
+        scale = np.maximum(np.maximum(np.abs(v[:-1]), np.abs(v[1:])),
+                           np.finfo(float).tiny)
+        new[1:] = (v[:-1] - v[1:]) > rtol * scale
+    return np.cumsum(new) - 1
 
 
 def n_distinct(s: np.ndarray, rtol: float = TIE_RTOL) -> int:
     """Number of distinct values, treating values within rtol as equal."""
-    v = np.sort(np.asarray(s, dtype=np.float64))
-    if v.size == 0:
-        return 0
-    gaps = np.diff(v) > rtol * np.maximum(np.abs(v[1:]), np.finfo(float).tiny)
-    return 1 + int(gaps.sum())
+    v = np.sort(np.asarray(s, dtype=np.float64))[::-1]
+    return 0 if v.size == 0 else int(_tie_groups(v, rtol)[-1] + 1)
 
 
-def top_k(s: np.ndarray, k: int) -> tuple[np.ndarray, int]:
-    """Indices of the k most outlying points, plus the tie count at the cut.
+def desc_ranks(s: np.ndarray, rtol: float = TIE_RTOL) -> np.ndarray:
+    """Descending ranks, 1 = highest score; tied scores share their average rank.
 
-    Stable sort, so ties resolve by index and the result does not depend on
-    the sorting implementation. numpy's default quicksort is unstable and
-    gave different answers on different machines for exactly this reason.
+    Two scores are tied when they differ by at most rtol relative to the
+    larger. The result does not depend on the order of the input or on the
+    sorting algorithm, which is what makes it portable across machines.
     """
-    order = np.argsort(-s, kind="stable")[:k]
-    boundary = s[order[-1]]
-    n_tied = int(np.isclose(s, boundary, rtol=TIE_RTOL, atol=0.0).sum())
-    return order, (n_tied if n_tied > 1 else 0)
+    s = np.asarray(s, dtype=np.float64)
+    n = len(s)
+    order = np.argsort(-s, kind="stable")
+    gid = _tie_groups(s[order], rtol)
+    starts = np.flatnonzero(np.r_[True, gid[1:] != gid[:-1]])
+    ends = np.r_[starts[1:], n] - 1
+    avg = (starts + ends) / 2.0 + 1.0
+    rho = np.empty(n)
+    rho[order] = avg[gid]
+    return rho
 
 
-def signed_displacement(s_hd: np.ndarray, s_ld: np.ndarray) -> np.ndarray:
-    """Per-point signed rank displacement, in [-1, 1]. Negative = masked."""
-    n = len(s_hd)
-    return (rankdata(s_ld) - rankdata(s_hd)) / n
+def displacement(rho_a: np.ndarray, rho_b: np.ndarray) -> np.ndarray:
+    """lambda = log2(rho_a / rho_b) in bits. Negative = pushed toward the crowd."""
+    return np.log2(np.asarray(rho_a, float) / np.asarray(rho_b, float))
 
 
-def topk_failures(s_hd: np.ndarray, s_ld: np.ndarray, k: int) -> dict:
-    """Which points enter or leave the analyst's shortlist.
+def budget(n: int, frac: float = BUDGET_FRAC) -> int:
+    """Default shortlist size: the top frac of n points, at least one."""
+    return max(1, int(np.ceil(frac * n)))
 
-    masked  : in the original space's top k, absent from the projection's
-    phantom : in the projection's top k, absent from the original space's
 
-    With equal budgets the two counts are necessarily equal, so the rate is
-    reported once. What differs, and what matters, is WHICH points.
+def shortlist(rho: np.ndarray, m: float) -> np.ndarray:
+    """Points ranked within the budget. Tied points share one status."""
+    return np.asarray(rho) <= m
+
+
+# --- the noise null ---------------------------------------------------------
+
+def null_log_ranks(X: np.ndarray, k: int, B: int = NULL_B,
+                   seed: int = NULL_SEED) -> np.ndarray:
+    """(n, B) log2-ranks of every point in B half-reference replicates.
+
+    Replicate b draws a random half H_b of the points and scores every point
+    by its distance to the (k // 2)-th nearest neighbour within H_b, the point
+    itself excluded. Ranks are then taken over all n points. The scoring goes
+    through neighbors.knn_to_reference(), the same metric and precision as
+    the main comparison.
     """
-    order_hd, ties_hd = top_k(s_hd, k)
-    order_ld, ties_ld = top_k(s_ld, k)
-    top_hd, top_ld = set(order_hd.tolist()), set(order_ld.tolist())
-    masked = sorted(top_hd - top_ld)
-    phantom = sorted(top_ld - top_hd)
-    return {
-        "k": k,
-        "overlap": len(top_hd & top_ld),
-        "rate": len(masked) / k,
-        "boundary_ties_hd": ties_hd,
-        "boundary_ties_ld": ties_ld,
-        "masked_idx": masked,
-        "phantom_idx": phantom,
-    }
+    from neighbors import knn_to_reference
+
+    X = np.asarray(X, dtype=np.float64)
+    n = len(X)
+    kh = max(1, k // 2)
+    rng = np.random.default_rng(seed)
+    L = np.empty((n, B))
+    for b in range(B):
+        ref = np.zeros(n, dtype=bool)
+        ref[rng.choice(n, size=n // 2, replace=False)] = True
+        s = knn_to_reference(X, ref, kh)[:, -1]
+        L[:, b] = np.log2(desc_ranks(s))
+    return L
 
 
-def summarise(s_hd, s_ld, y, k=None) -> dict:
-    """One dataset, one projection: the numbers worth reporting."""
-    y = np.asarray(y).astype(bool)
-    k = int(y.sum()) if k is None else k
-    of = signed_displacement(s_hd, s_ld)
-    tk = topk_failures(s_hd, s_ld, k)
-
-    # Of the true anomalies the original space ranked highly, how many did
-    # the projection lose? This is the number with a cost attached.
-    order_hd, _ = top_k(s_hd, k)
-    order_ld, _ = top_k(s_ld, k)
-    true_in_top_hd = order_hd[y[order_hd]]
-    top_ld_set = set(order_ld.tolist())
-    lost = [int(i) for i in true_in_top_hd if int(i) not in top_ld_set]
-
-    return {
-        "k": k,
-        "shortlist_overlap": tk["overlap"] / k,
-        "of_median_anomalies": float(np.median(of[y])),
-        "of_median_inliers": float(np.median(of[~y])),
-        "of_p05_anomalies": float(np.percentile(of[y], 5)),
-        "true_anomalies_found_hd": int(len(true_in_top_hd)),
-        "true_anomalies_lost": len(lost),
-        "boundary_ties_hd": tk["boundary_ties_hd"],
-        "boundary_ties_ld": tk["boundary_ties_ld"],
-        "distinct_scores_hd": n_distinct(s_hd),
-        "lost_idx": lost,
-        "masked_idx": tk["masked_idx"],
-        "phantom_idx": tk["phantom_idx"],
-    }
+def _pairwise_abs_diffs(L_chunk: np.ndarray) -> np.ndarray:
+    B = L_chunk.shape[1]
+    iu, ju = np.triu_indices(B, 1)
+    return np.abs(L_chunk[:, iu] - L_chunk[:, ju])
 
 
-if __name__ == "__main__":
-    import warnings
-    warnings.filterwarnings("ignore")
-    import matplotlib
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
+def null_threshold(L: np.ndarray, alpha: float = ALPHA,
+                   chunk: int = 256) -> np.ndarray:
+    """Per-point threshold q(i): |lambda| > q(i) is significant at one-sided alpha.
 
-    from config import RESULTS, FIGURES, DEFAULT_K
+    The null of a difference is symmetric, so P(D > q) = alpha is the
+    (1 - 2 alpha) quantile of |D|. Computed over all B(B-1)/2 replicate pairs.
+    """
+    out = np.empty(L.shape[0])
+    for s in range(0, L.shape[0], chunk):
+        out[s:s + chunk] = np.quantile(_pairwise_abs_diffs(L[s:s + chunk]),
+                                       1 - 2 * alpha, axis=1)
+    return out
+
+
+def null_pvalues(L: np.ndarray, lam: np.ndarray, chunk: int = 256) -> np.ndarray:
+    """One-sided p-value in the direction each point moved: P(|D| >= |lambda|) / 2."""
+    lam = np.abs(np.asarray(lam, float))
+    out = np.empty(L.shape[0])
+    for s in range(0, L.shape[0], chunk):
+        D = _pairwise_abs_diffs(L[s:s + chunk])
+        out[s:s + chunk] = 0.5 * (D >= lam[s:s + chunk, None] - 1e-12).mean(axis=1)
+    return out
+
+
+def get_null(name: str, k: int, B: int = NULL_B, null_seed: int = NULL_SEED,
+             rebuild: bool = False, verbose: bool = True,
+             **loader_kw) -> tuple[np.ndarray, dict]:
+    """The noise null for one dataset, computed once and cached.
+
+    Keyed on the data hash, like the neighbour graph, so a different loading
+    option can never return a null computed from different data. null_seed
+    draws the half-samples; loader keywords (subsample, seed, ...) pass
+    straight to load_dataset.
+    """
+    import time
+    from config import CACHE
     from datasets import load_dataset
-    from neighbors import get_knn, knn_score
-    from projections import project, knn_dist
 
-    names = ["wbc", "ionosphere", "cardio", "musk",
-             "satimage2", "satellite", "shuttle", "backdoor"]
-    method, k = "pca", DEFAULT_K
-    rows, panels = [], {}
+    X, _, meta = load_dataset(name, **loader_kw)
+    path = CACHE / (f"null_{meta['name']}_{meta['data_hash']}_k{k}_B{B}_s{null_seed}_"
+                    f"{NULL_VERSION}.npz")
+    if path.exists() and not rebuild:
+        return np.load(path)["L"], meta
+    if verbose:
+        print(f"  noise null for {name}: {B} half-reference replicates "
+              f"(n={meta['n']}, D={meta['D']}) ...", flush=True)
+    t0 = time.time()
+    L = null_log_ranks(np.asarray(X), k, B, null_seed)
+    np.savez_compressed(path, L=L)
+    path.with_suffix(".json").write_text(json.dumps(
+        {**meta, "k": k, "k_replicate": max(1, k // 2), "B": B, "null_seed": null_seed,
+         "null_version": NULL_VERSION, "seconds": round(time.time() - t0, 1)},
+        indent=2))
+    if verbose:
+        print(f"    done in {time.time() - t0:.0f}s", flush=True)
+    return L, meta
 
-    for name in names:
-        dist_hd, _, meta = get_knn(name, k=k, verbose=False)
-        _, y, _ = load_dataset(name)
-        s_hd = knn_score(dist_hd, k)
-        Y, _ = project(name, method=method, n_components=2, verbose=False)
-        s_ld = knn_score(knn_dist(Y, k), k)
 
-        r = summarise(s_hd, s_ld, y)
-        r.update(dataset=name, n=meta["n"], D=meta["D"])
-        rows.append(r)
-        panels[name] = (Y, y, r)
+# --- calls and aggregates ---------------------------------------------------
 
-    hdr = (f"{'dataset':<12}{'k':>6}{'overlap':>9}{'found':>7}{'lost':>6}"
-           f"{'OF med':>9}{'OF p05':>9}{'distinct':>10}{'ties':>6}")
-    print("\n" + hdr); print("-" * len(hdr))
-    for r in rows:
-        ties = max(r["boundary_ties_hd"], r["boundary_ties_ld"])
-        flag = f"{ties}" if ties else "-"
-        print(f"{r['dataset']:<12}{r['k']:>6}{100*r['shortlist_overlap']:>8.0f}%"
-              f"{r['true_anomalies_found_hd']:>7}{r['true_anomalies_lost']:>6}"
-              f"{r['of_median_anomalies']:>9.3f}{r['of_p05_anomalies']:>9.3f}"
-              f"{r['distinct_scores_hd']:>10}{flag:>6}")
-    print("\n  distinct = distinct original-space score values out of n")
-    print("  ties     = points sharing the boundary score; the cut is arbitrary among them")
+def classify(rho_a: np.ndarray, rho_b: np.ndarray, m: float,
+             p: np.ndarray, alpha: float = ALPHA) -> np.ndarray:
+    """Category code per point (see CATEGORY_NAMES)."""
+    in_a, in_b = shortlist(rho_a, m), shortlist(rho_b, m)
+    sig = np.asarray(p) < alpha
+    cat = np.full(len(rho_a), BACKGROUND, dtype=np.int8)
+    cat[in_a & in_b] = RETAINED
+    cat[in_a & ~in_b & sig] = MASKED
+    cat[in_a & ~in_b & ~sig] = EXIT_AMBIGUOUS
+    cat[in_b & ~in_a & sig] = PHANTOM
+    cat[in_b & ~in_a & ~sig] = ENTRY_AMBIGUOUS
+    return cat
 
-    show = ["shuttle", "backdoor", "musk", "ionosphere"]
-    fig, axes = plt.subplots(1, 4, figsize=(18, 4.6))
-    for ax, name in zip(axes, show):
-        Y, y, r = panels[name]
-        masked = np.array(r["masked_idx"], dtype=int)
-        phantom = np.array(r["phantom_idx"], dtype=int)
-        ax.scatter(Y[:, 0], Y[:, 1], s=3, c="#d8d8d8", lw=0, rasterized=True)
-        if len(phantom):
-            ax.scatter(Y[phantom, 0], Y[phantom, 1], s=14, c="#3b7dd8",
-                       lw=0, label=f"phantom ({len(phantom)})")
-        if len(masked):
-            ax.scatter(Y[masked, 0], Y[masked, 1], s=14, c="#c0392b",
-                       lw=0, label=f"masked ({len(masked)})")
-        ax.set_title(f"{name}  (D={r['D']}, overlap {100*r['shortlist_overlap']:.0f}%)",
-                     fontsize=11)
-        ax.set_xticks([]); ax.set_yticks([])
-        ax.legend(loc="upper right", fontsize=8, frameon=False, markerscale=1.6)
-    fig.suptitle("PCA to 2D: which points enter and leave the analyst's shortlist",
-                 fontsize=13)
-    fig.tight_layout()
-    out_fig = FIGURES / "step7_pca_shortlist.png"
-    fig.savefig(out_fig, dpi=140, bbox_inches="tight")
 
-    slim = [{kk: vv for kk, vv in r.items() if not kk.endswith("_idx")} for r in rows]
-    out = RESULTS / "step7_placeholder_measure.json"
-    out.write_text(json.dumps(slim, indent=2))
-    print(f"\nWrote {out}\nWrote {out_fig}")
+def adjusted_overlap(in_a: np.ndarray, in_b: np.ndarray) -> tuple[float, float]:
+    """Chance-adjusted shortlist overlap and its permutation p-value.
+
+    Under the permutation null (projected scores shuffled across points) the
+    overlap is hypergeometric with mean |S_a| |S_b| / n. Returns
+    (AO, P(overlap >= observed)).
+    """
+    n = len(in_a)
+    sa, sb = int(in_a.sum()), int(in_b.sum())
+    o = int((in_a & in_b).sum())
+    e = sa * sb / n
+    top = min(sa, sb) - e
+    ao = (o - e) / top if top > 0 else float("nan")
+    p = float(hypergeom.sf(o - 1, n, sa, sb))
+    return float(ao), p
+
+
+def weighted_rank_corr(rho_a: np.ndarray, rho_b: np.ndarray,
+                       in_a: np.ndarray, in_b: np.ndarray) -> float:
+    """Weighted Pearson correlation of rank-normalised scores.
+
+    Weights after Schubert, Wojdanowski, Zimek & Kriegel (SDM 2012): the
+    union of the two shortlists, K points, shares half the total weight and
+    the remaining n - K points share the other half, so the bulk of inliers
+    cannot dominate. They normalise scores rather than ranks; ranks are used
+    here to keep v1 rank-based throughout (a v2 question).
+    """
+    n = len(rho_a)
+    u_a = 1 - (np.asarray(rho_a) - 1) / (n - 1)
+    u_b = 1 - (np.asarray(rho_b) - 1) / (n - 1)
+    union = in_a | in_b
+    K = int(union.sum())
+    if K in (0, n):
+        w = np.ones(n)
+    else:
+        w = np.where(union, 1 / (2 * K), 1 / (2 * (n - K)))
+    w = w / w.sum()
+    ma, mb = (w * u_a).sum(), (w * u_b).sum()
+    cov = (w * (u_a - ma) * (u_b - mb)).sum()
+    va, vb = (w * (u_a - ma) ** 2).sum(), (w * (u_b - mb) ** 2).sum()
+    return float(cov / np.sqrt(va * vb)) if va > 0 and vb > 0 else float("nan")
+
+
+def summarise(a: np.ndarray, b: np.ndarray, L: np.ndarray, m: float | None = None,
+              y: np.ndarray | None = None, alpha: float = ALPHA) -> dict:
+    """One dataset, one projection, one budget: every number worth reporting.
+
+    a, b : detector scores in the original space and in the projection
+    L    : the noise null, from null_log_ranks() or get_null()
+    m    : shortlist budget; default the top BUDGET_FRAC of points
+    y    : labels, optional; used only to say what the failures cost
+    Per-point arrays (rho, lambda, p, category) come back under "points".
+    """
+    from scipy.stats import spearmanr
+
+    n = len(a)
+    m = budget(n) if m is None else m
+    rho_a, rho_b = desc_ranks(a), desc_ranks(b)
+    lam = displacement(rho_a, rho_b)
+    p = null_pvalues(L, lam)
+    cat = classify(rho_a, rho_b, m, p, alpha)
+    in_a, in_b = shortlist(rho_a, m), shortlist(rho_b, m)
+    count = {name: int((cat == code).sum()) for code, name in enumerate(CATEGORY_NAMES)}
+    sa, sb = int(in_a.sum()), int(in_b.sum())
+    ao, p_perm = adjusted_overlap(in_a, in_b)
+
+    def med(mask):
+        return float(np.median(lam[mask])) if mask.any() else float("nan")
+
+    out = {
+        "n": n, "m": float(m), "alpha": alpha,
+        "size_a": sa, "size_b": sb,
+        "overlap": int((in_a & in_b).sum()),
+        "adjusted_overlap": ao, "p_perm": p_perm,
+        "masking_rate": count["masked"] / sa if sa else float("nan"),
+        "phantom_rate": count["phantom"] / sb if sb else float("nan"),
+        "exit_rate": (count["masked"] + count["exit_ambiguous"]) / sa if sa else float("nan"),
+        **{f"n_{k}": v for k, v in count.items()},
+        "median_bits_masked": med(cat == MASKED),
+        "median_bits_phantom": med(cat == PHANTOM),
+        "median_bits_shortlist_a": med(in_a),
+        "weighted_rank_corr": weighted_rank_corr(rho_a, rho_b, in_a, in_b),
+        "spearman": float(spearmanr(a, b).statistic),
+        "ties_a": n - n_distinct(a), "ties_b": n - n_distinct(b),
+    }
+    if y is not None:
+        y = np.asarray(y).astype(bool)
+        out.update({
+            "anomalies": int(y.sum()),
+            "anomalies_in_a": int((in_a & y).sum()),
+            "anomalies_in_b": int((in_b & y).sum()),
+            "masked_anomalies": int(((cat == MASKED) & y).sum()),
+            "phantom_anomalies": int(((cat == PHANTOM) & y).sum()),
+            "phantom_inliers": int(((cat == PHANTOM) & ~y).sum()),
+            "precision_a": float((in_a & y).sum() / sa) if sa else float("nan"),
+            "precision_b": float((in_b & y).sum() / sb) if sb else float("nan"),
+        })
+    out["points"] = {"rho_a": rho_a, "rho_b": rho_b, "lam": lam, "p": p, "cat": cat}
+    return out
