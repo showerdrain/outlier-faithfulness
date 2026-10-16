@@ -166,9 +166,12 @@ correlation +0.85, -0.43 and +0.26). On magic, kNN finds the linear methods
 keep most of the top 5% and the neighbour-based methods lose most of it; LOF
 finds every method loses about the same (MEASURE.md 9.6).
 - *Decision:* kNN is the detector of the benchmark, and every statement
-  about methods names it. LOF runs on the continuous benchmark datasets in
-  week 7, on the projections already cached, so the comparison can be read
-  for two detectors before week 8. Isolation forest has no neighbour graph
+  about methods names it. LOF runs in week 7 on the benchmark datasets whose
+  original-space kNN scores are at least 95% distinct (all but celeba), on
+  the projections already cached, so the comparison can be read for two
+  detectors before week 8. The 95% rule separates the development set's
+  lattice datasets (42% and 81%), where LOF depends on how ties are ordered,
+  from its continuous ones (99 to 100%). Isolation forest has no neighbour graph
   and its own randomness, so its noise null would be its seed variance; it
   is added in week 12 if time allows. A dimensionality-aware detector
   (Anderberg et al. 2024) belongs to Question 3 and is tried in week 10.

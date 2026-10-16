@@ -693,6 +693,9 @@ The candidate with three other scale sets, {20, 50}, {20, 100} and
 | candidate, other scale sets | 90 | 0.010 | 89% | 0.33 |
 | version 1, other k | 125 | 0.041 | 71% | 0.75 |
 
+(9.1 put version 1's largest change at 0.67, from UMAP on wbc; it is 0.75,
+from PaCMAP on wbc.)
+
 **E5 held.** The largest changes come from wbc, where one point is 8% of the
 12-point shortlist (TriMap with {20, 100}: 0.17 to 0.50), and from TriMap and
 t-SNE on fault (0.49 to 0.60, 0.71 to 0.59, with {20, 50}).
